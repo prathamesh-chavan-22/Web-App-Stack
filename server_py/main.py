@@ -1,0 +1,75 @@
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from config import PORT
+from database import async_session_factory
+from session import create_session_table
+from seed import seed_database
+
+from routers import auth, users, courses, enrollments, notifications, speaking
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await create_session_table()
+    async with async_session_factory() as db:
+        await seed_database(db)
+    yield
+    # Shutdown — nothing needed
+
+
+app = FastAPI(lifespan=lifespan)
+
+# CORS — allow Vite dev server
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Custom exception handler to match Express error format: {"message": "..."}
+@app.exception_handler(422)
+async def validation_exception_handler(request: Request, exc):
+    return JSONResponse(status_code=400, content={"message": "Validation error"})
+
+
+@app.exception_handler(401)
+async def unauthorized_handler(request: Request, exc):
+    return JSONResponse(status_code=401, content={"message": "Not authenticated"})
+
+
+# Include routers
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(courses.router)
+app.include_router(enrollments.router)
+app.include_router(notifications.router)
+app.include_router(speaking.router)
+
+# Production: serve static files
+dist_dir = os.path.join(os.path.dirname(__file__), "..", "dist", "public")
+if os.path.isdir(dist_dir):
+    app.mount("/assets", StaticFiles(directory=os.path.join(dist_dir, "assets")), name="assets")
+
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = os.path.join(dist_dir, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(dist_dir, "index.html"))
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)

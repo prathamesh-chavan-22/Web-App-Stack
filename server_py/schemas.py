@@ -1,0 +1,155 @@
+from datetime import datetime
+from typing import Optional, List
+
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+
+# --- Response models ---
+
+
+class UserOut(CamelModel):
+    id: int
+    email: str
+    password: str
+    full_name: str
+    role: str
+    created_at: Optional[datetime] = None
+
+
+class CourseOut(CamelModel):
+    id: int
+    title: str
+    description: str
+    status: str
+    created_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+    objectives: Optional[List[str]] = None
+    audience: Optional[str] = None
+    depth: Optional[str] = None
+
+
+class CourseModuleOut(CamelModel):
+    id: int
+    course_id: Optional[int] = None
+    title: str
+    content: str
+    sort_order: int
+    quiz: Optional[str] = None
+
+
+class CourseDetailOut(CourseOut):
+    modules: Optional[List[CourseModuleOut]] = None
+    creator: Optional[UserOut] = None
+
+
+class CourseListOut(CourseOut):
+    creator: Optional[UserOut] = None
+
+
+class EnrollmentOut(CamelModel):
+    id: int
+    user_id: Optional[int] = None
+    course_id: Optional[int] = None
+    status: str
+    progress_pct: int
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class EnrollmentDetailOut(EnrollmentOut):
+    course: Optional[CourseDetailOut] = None
+    user: Optional[UserOut] = None
+
+
+class NotificationOut(CamelModel):
+    id: int
+    user_id: Optional[int] = None
+    title: str
+    message: str
+    is_read: Optional[bool] = None
+    created_at: Optional[datetime] = None
+
+
+class SpeakingPracticeOut(CamelModel):
+    id: int
+    user_id: Optional[int] = None
+    prompt: str
+    transcript: Optional[str] = None
+    audio_url: Optional[str] = None
+    pronunciation_score: Optional[float] = None
+    fluency_score: Optional[float] = None
+    feedback: Optional[str] = None
+    corrections: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+# --- Input models ---
+
+
+class LoginInput(CamelModel):
+    email: str
+    password: str
+
+
+class RegisterInput(CamelModel):
+    email: str
+    password: str
+    full_name: str
+    role: str = "employee"
+
+
+class CreateCourse(CamelModel):
+    title: str
+    description: str
+    status: str = "draft"
+    created_by: Optional[int] = None
+    objectives: Optional[List[str]] = None
+    audience: Optional[str] = None
+    depth: Optional[str] = None
+
+
+class CreateModule(CamelModel):
+    title: str
+    content: str
+    sort_order: int = 0
+    quiz: Optional[str] = None
+
+
+class CreateEnrollment(CamelModel):
+    user_id: int
+    course_id: int
+    status: str = "assigned"
+    progress_pct: int = 0
+
+
+class UpdateProgress(CamelModel):
+    progress_pct: int
+    status: Optional[str] = None
+
+
+class CreateSpeakingPractice(CamelModel):
+    prompt: str
+    transcript: Optional[str] = None
+    audio_url: Optional[str] = None
+    pronunciation_score: Optional[float] = None
+    fluency_score: Optional[float] = None
+    feedback: Optional[str] = None
+    corrections: Optional[str] = None
+
+
+class ErrorResponse(CamelModel):
+    message: str
+    field: Optional[str] = None
+
+
+class MessageResponse(CamelModel):
+    message: str
