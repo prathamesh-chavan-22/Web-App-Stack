@@ -70,9 +70,9 @@ async def _process_analysis(analysis_id: int, rows: list[dict], headers: list[st
                     suggested_trainings=ai_result["suggested_trainings"],
                 )
 
-            # Process with concurrency limit (handled by semaphore in mistral_ai)
-            tasks = [process_employee(row) for row in rows]
-            await asyncio.gather(*tasks)
+            # Process sequentially to avoid concurrent commits on same session
+            for row in rows:
+                await process_employee(row)
 
             await storage.update_analysis_status(
                 db, analysis_id, status="completed", total_employees=len(rows),

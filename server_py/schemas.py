@@ -35,6 +35,8 @@ class CourseOut(CamelModel):
     objectives: Optional[List[str]] = None
     audience: Optional[str] = None
     depth: Optional[str] = None
+    generation_status: Optional[str] = None
+    generation_progress: Optional[str] = None
 
 
 class CourseModuleOut(CamelModel):
@@ -44,6 +46,8 @@ class CourseModuleOut(CamelModel):
     content: str
     sort_order: int
     quiz: Optional[str] = None
+    audio_url: Optional[str] = None
+    images: Optional[List[str]] = None
 
 
 class CourseDetailOut(CourseOut):
@@ -122,6 +126,12 @@ class CreateModule(CamelModel):
     content: str
     sort_order: int = 0
     quiz: Optional[str] = None
+
+
+class GenerateCourseInput(CamelModel):
+    title: str
+    audience: str = "all"
+    depth: str = "intermediate"
 
 
 class CreateEnrollment(CamelModel):

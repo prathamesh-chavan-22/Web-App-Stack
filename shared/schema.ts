@@ -22,6 +22,8 @@ export const courses = pgTable("courses", {
   objectives: text("objectives").array(),
   audience: text("audience"),
   depth: text("depth"), // 'beginner', 'intermediate', 'advanced'
+  generationStatus: text("generation_status"),
+  generationProgress: text("generation_progress"),
 });
 
 export const courseModules = pgTable("course_modules", {
@@ -31,6 +33,8 @@ export const courseModules = pgTable("course_modules", {
   content: text("content").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
   quiz: text("quiz"), // JSON stringified quiz data
+  audioUrl: text("audio_url"),
+  images: json("images"), // Array of image URLs
 });
 
 export const enrollments = pgTable("enrollments", {

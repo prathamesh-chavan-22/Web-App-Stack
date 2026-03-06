@@ -105,6 +105,15 @@ export const api = {
         201: z.custom<typeof courseModules.$inferSelect>(),
         400: errorSchemas.validation,
       }
+    },
+    generate: {
+      method: "POST" as const,
+      path: "/api/courses/generate" as const,
+      input: z.object({ title: z.string(), audience: z.string().optional(), depth: z.string().optional() }),
+      responses: {
+        201: z.custom<typeof courses.$inferSelect>(),
+        400: errorSchemas.validation,
+      }
     }
   },
   enrollments: {

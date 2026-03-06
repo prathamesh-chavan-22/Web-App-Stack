@@ -1,6 +1,9 @@
 import os
 from dotenv import load_dotenv
 
+# Load .env from server_py/ directory (where config.py lives)
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+# Also load from project root .env as fallback
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/edtech_lms")

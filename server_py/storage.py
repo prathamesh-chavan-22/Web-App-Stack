@@ -67,6 +67,49 @@ async def create_course(db: AsyncSession, *, title: str, description: str, statu
     return course
 
 
+async def update_course_generation_status(db: AsyncSession, course_id: int,
+                                           status: str, progress: str | None = None) -> Course | None:
+    result = await db.execute(select(Course).where(Course.id == course_id))
+    course = result.scalar_one_or_none()
+    if course is None:
+        return None
+    course.generation_status = status
+    if progress is not None:
+        course.generation_progress = progress
+    await db.commit()
+    await db.refresh(course)
+    return course
+
+
+async def update_course_details(db: AsyncSession, course_id: int, *,
+                                 title: str | None = None, description: str | None = None,
+                                 objectives: list[str] | None = None) -> Course | None:
+    result = await db.execute(select(Course).where(Course.id == course_id))
+    course = result.scalar_one_or_none()
+    if course is None:
+        return None
+    if title is not None:
+        course.title = title
+    if description is not None:
+        course.description = description
+    if objectives is not None:
+        course.objectives = objectives
+    await db.commit()
+    await db.refresh(course)
+    return course
+
+
+async def update_module_audio(db: AsyncSession, module_id: int, audio_url: str) -> CourseModule | None:
+    result = await db.execute(select(CourseModule).where(CourseModule.id == module_id))
+    module = result.scalar_one_or_none()
+    if module is None:
+        return None
+    module.audio_url = audio_url
+    await db.commit()
+    await db.refresh(module)
+    return module
+
+
 # --- Modules ---
 
 
@@ -76,8 +119,10 @@ async def get_course_modules(db: AsyncSession, course_id: int) -> List[CourseMod
 
 
 async def create_course_module(db: AsyncSession, *, course_id: int, title: str, content: str,
-                               sort_order: int = 0, quiz: str | None = None) -> CourseModule:
-    module = CourseModule(course_id=course_id, title=title, content=content, sort_order=sort_order, quiz=quiz)
+                               sort_order: int = 0, quiz: str | None = None,
+                               audio_url: str | None = None, images: list | None = None) -> CourseModule:
+    module = CourseModule(course_id=course_id, title=title, content=content,
+                          sort_order=sort_order, quiz=quiz, audio_url=audio_url, images=images)
     db.add(module)
     await db.commit()
     await db.refresh(module)

@@ -32,6 +32,8 @@ class Course(Base):
     objectives: Mapped[Optional[List[str]]] = mapped_column(ARRAY(Text), nullable=True)
     audience: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     depth: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    generation_status: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    generation_progress: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class CourseModule(Base):
@@ -43,6 +45,8 @@ class CourseModule(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     quiz: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    audio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    images: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
 
 class Enrollment(Base):

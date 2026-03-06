@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
+import { apiRequest } from "@/lib/queryClient";
 
 type Course = z.infer<typeof api.courses.list.responses[200]>[0];
 type CourseList = Course[];
@@ -20,7 +21,7 @@ export function useCourses() {
   });
 }
 
-export function useCourse(id: number) {
+export function useCourse(id: number, options?: { refetchInterval?: number | false }) {
   return useQuery<CourseDetails>({
     queryKey: [api.courses.get.path, id],
     queryFn: async () => {
@@ -30,6 +31,7 @@ export function useCourse(id: number) {
       return res.json();
     },
     enabled: !!id,
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 
@@ -80,6 +82,19 @@ export function useCreateModule(courseId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.courses.getModules.path, courseId] });
       queryClient.invalidateQueries({ queryKey: [api.courses.get.path, courseId] });
+    },
+  });
+}
+
+export function useGenerateCourse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { title: string; audience?: string; depth?: string }) => {
+      const res = await apiRequest("POST", api.courses.generate.path, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.courses.list.path] });
     },
   });
 }
