@@ -61,7 +61,7 @@ app.include_router(analysis.router)
 # Static files for generated audio
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("/api/static", StaticFiles(directory=static_dir), name="static")
 
 # Production: serve static files
 dist_dir = os.path.join(os.path.dirname(__file__), "..", "dist", "public")

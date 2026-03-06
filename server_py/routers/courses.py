@@ -212,6 +212,33 @@ async def list_modules(course_id: int, db: AsyncSession = Depends(get_db)):
     return [CourseModuleOut.model_validate(m).model_dump(by_alias=True) for m in modules]
 
 
+@router.patch("/{course_id}/publish")
+async def publish_course(course_id: int, db: AsyncSession = Depends(get_db)):
+    """Toggle course status between draft and published."""
+    data = await storage.get_course(db, course_id)
+    if data is None:
+        return Response(
+            content=ErrorResponse(message="Course not found").model_dump_json(by_alias=True),
+            status_code=404,
+            media_type="application/json",
+        )
+    course = data["course"]
+    new_status = "published" if course.status != "published" else "draft"
+
+    from sqlalchemy import update as sa_update
+    from models import Course
+    stmt = sa_update(Course).where(Course.id == course_id).values(status=new_status)
+    await db.execute(stmt)
+    await db.commit()
+
+    # Re-fetch
+    refreshed = await storage.get_course(db, course_id)
+    c = refreshed["course"]
+    result = CourseDetailOut.model_validate(c).model_dump(by_alias=True)
+    result["modules"] = [CourseModuleOut.model_validate(m).model_dump(by_alias=True) for m in refreshed["modules"]]
+    return result
+
+
 @router.post("/{course_id}/modules", status_code=201)
 async def create_module(course_id: int, body: CreateModule, db: AsyncSession = Depends(get_db)):
     module = await storage.create_course_module(

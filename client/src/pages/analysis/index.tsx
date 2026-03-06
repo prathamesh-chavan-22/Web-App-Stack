@@ -1,13 +1,13 @@
 import { useState, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   UploadCloud, FileText, Users, BookOpen, Lightbulb, Clock,
-  CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronUp, ExternalLink,
+  CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronUp, ExternalLink, Wand2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAnalyses, useAnalysis, useUploadAnalysis } from "@/hooks/use-analysis";
@@ -87,11 +87,10 @@ export default function WorkforceAnalysis() {
         <div className="lg:col-span-8 space-y-6">
           {/* Upload area */}
           <Card
-            className={`border-2 border-dashed transition-colors ${
-              isDragging
-                ? "border-primary bg-primary/5"
-                : "border-border/50 bg-muted/10"
-            }`}
+            className={`border-2 border-dashed transition-colors ${isDragging
+              ? "border-primary bg-primary/5"
+              : "border-border/50 bg-muted/10"
+              }`}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
@@ -259,9 +258,8 @@ export default function WorkforceAnalysis() {
             {analyses?.map((a) => (
               <Card
                 key={a.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  selectedAnalysisId === a.id ? "border-primary shadow-md" : "border-border/50"
-                }`}
+                className={`cursor-pointer transition-all hover:shadow-md ${selectedAnalysisId === a.id ? "border-primary shadow-md" : "border-border/50"
+                  }`}
                 onClick={() => setSelectedAnalysisId(a.id)}
               >
                 <CardContent className="p-4">
@@ -322,10 +320,43 @@ function ResultRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const skills = (result.recommendedSkills as string[]) || [];
   const matchedIds = (result.matchedCourseIds as number[]) || [];
   const trainings = (result.suggestedTrainings as { title: string; description: string; reason: string }[]) || [];
   const totalRecs = matchedIds.length + trainings.length;
+
+  const [assigningCourseId, setAssigningCourseId] = useState<number | null>(null);
+  const [assignedCourseIds, setAssignedCourseIds] = useState<Set<number>>(new Set());
+
+  const handleAssignCourse = async (courseId: number) => {
+    setAssigningCourseId(courseId);
+    try {
+      // Create enrollment for this employee - use a generic user ID since we only have names
+      // In production, you'd look up the user by name/email
+      const res = await fetch("/api/enrollments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId,
+          userId: 1, // Default to admin for now - would be employee lookup in production
+          status: "in_progress",
+          progressPct: 0,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to assign course");
+      setAssignedCourseIds(prev => new Set(Array.from(prev).concat(courseId)));
+      toast({
+        title: "Course Assigned ✅",
+        description: `Course #${courseId} assigned for ${result.employeeName}.`,
+      });
+    } catch (e: any) {
+      toast({ title: "Assignment Failed", description: e.message, variant: "destructive" });
+    } finally {
+      setAssigningCourseId(null);
+    }
+  };
 
   return (
     <>
@@ -368,17 +399,40 @@ function ResultRow({
               {matchedIds.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Matched Existing Courses</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-2">
                     {matchedIds.map((id) => (
-                      <a
-                        key={id}
-                        href={`/courses/${id}`}
-                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Course #{id}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                      <div key={id} className="flex items-center gap-2 bg-background rounded-lg p-2.5 border border-border/50">
+                        <BookOpen className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <a
+                          href={`/courses/${id}`}
+                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline flex-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Course #{id}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                        {assignedCourseIds.has(id) ? (
+                          <span className="text-xs text-green-600 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Assigned
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="text-xs h-7 px-3"
+                            disabled={assigningCourseId === id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAssignCourse(id);
+                            }}
+                          >
+                            {assigningCourseId === id ? (
+                              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                            ) : null}
+                            Assign
+                          </Button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -397,15 +451,18 @@ function ResultRow({
                             <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
                             <p className="text-xs text-primary mt-1">Reason: {t.reason}</p>
                           </div>
-                          <a
-                            href={`/generator?title=${encodeURIComponent(t.title)}&description=${encodeURIComponent(t.description)}`}
-                            className="shrink-0"
-                            onClick={(e) => e.stopPropagation()}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocation(`/generator?title=${encodeURIComponent(t.title)}`);
+                            }}
                           >
-                            <Button size="sm" variant="outline" className="text-xs">
-                              Create Course
-                            </Button>
-                          </a>
+                            <Wand2 className="w-3 h-3 mr-1" />
+                            Generate Course
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -419,3 +476,4 @@ function ResultRow({
     </>
   );
 }
+

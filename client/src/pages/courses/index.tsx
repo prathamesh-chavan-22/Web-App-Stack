@@ -49,27 +49,44 @@ export default function CoursesList() {
                 {course.title}
               </h3>
             </div>
-            
+
             <CardContent className="pt-6 flex-1">
               <p className="text-sm text-muted-foreground line-clamp-3">
-                {course.description}
+                {course.description || "No description provided."}
               </p>
             </CardContent>
-            
-            <CardFooter className="bg-muted/20 border-t border-border/50 py-4 px-6 flex justify-between items-center">
-              <div className="flex items-center text-xs text-muted-foreground">
+
+            <CardFooter className="bg-muted/20 border-t border-border/50 py-4 px-6 flex justify-between items-center gap-2">
+              <div className="flex items-center text-xs text-muted-foreground shrink-0">
                 <Clock className="w-3.5 h-3.5 mr-1" />
                 {course.createdAt ? formatDistanceToNow(new Date(course.createdAt), { addSuffix: true }) : 'Recently'}
               </div>
-              {user?.role === 'employee' ? (
-                <Button variant="ghost" size="sm" className="font-semibold text-primary hover:bg-primary/10" asChild>
-                  <Link href={`/courses/${course.id}`}>Start Learning</Link>
-                </Button>
-              ) : (
-                <Button variant="ghost" size="sm" asChild>
-                   <Link href={`/courses/${course.id}`}>View Details</Link>
-                </Button>
-              )}
+              <div className="flex gap-2 min-w-0 justify-end">
+                {(isLnd || user?.role === 'admin') && (
+                  <Button
+                    variant={course.status === 'published' ? 'outline' : 'secondary'}
+                    size="sm"
+                    className="shrink-0 text-xs h-8"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      await fetch(`/api/courses/${course.id}/publish`, { method: "PATCH" });
+                      // Trigger a refetch or simple page reload to reflect status
+                      window.location.reload();
+                    }}
+                  >
+                    {course.status === 'published' ? 'Unpublish' : 'Publish'}
+                  </Button>
+                )}
+                {user?.role === 'employee' ? (
+                  <Button variant="ghost" size="sm" className="font-semibold text-primary hover:bg-primary/10 shrink-0 h-8" asChild>
+                    <Link href={`/courses/${course.id}`}>Start</Link>
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" className="shrink-0 h-8" asChild>
+                    <Link href={`/courses/${course.id}`}>View</Link>
+                  </Button>
+                )}
+              </div>
             </CardFooter>
           </Card>
         ))}

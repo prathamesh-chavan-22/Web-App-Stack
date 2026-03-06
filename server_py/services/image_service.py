@@ -1,4 +1,5 @@
 import logging
+import re
 from urllib.parse import quote_plus
 
 import httpx
@@ -7,43 +8,72 @@ logger = logging.getLogger(__name__)
 
 
 async def fetch_images_for_chapter(search_terms: list[str], max_images: int = 3) -> list[str]:
-    """Fetch educational images using Unsplash Source (free, no API key needed)."""
+    """Fetch educational images for a chapter using Wikimedia Commons API."""
     images: list[str] = []
 
     for term in search_terms:
         if len(images) >= max_images:
             break
         try:
-            # Unsplash Source provides free images via direct URL
-            # The URL redirects to a random relevant image
-            query = quote_plus(term.strip())
-            # Use different sizes/seeds to get different images
-            seed = len(images)
-            img_url = f"https://images.unsplash.com/photo-{seed}?w=800&q=80&auto=format&fit=crop"
-
-            # Try Unsplash search API (no key needed for source URLs)
-            search_url = f"https://source.unsplash.com/800x400/?{query}"
-
-            # Verify the URL resolves (Unsplash source redirects to actual image)
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                resp = await client.head(search_url)
-                if resp.status_code == 200:
-                    # Use the final redirected URL (actual image)
-                    final_url = str(resp.url)
-                    if final_url and "images.unsplash.com" in final_url:
-                        images.append(final_url)
-                    else:
-                        # Fallback: use the source URL directly (browser will follow redirect)
-                        images.append(search_url)
-
+            found = await _search_wikimedia(term, limit=2)
+            images.extend(found)
         except Exception as e:
             logger.warning(f"Image fetch failed for term '{term}': {e}")
 
-    # If Unsplash didn't work, generate placeholder images with relevant keywords
+    # Fallback to generated SVG placeholders if no images found
     if not images:
         for term in search_terms[:max_images]:
-            query = quote_plus(term.strip())
-            # Fallback to a placeholder service
-            images.append(f"https://placehold.co/800x400/1a1a2e/e0e0e0?text={query}")
+            images.append(_generate_placeholder_svg_url(term))
 
     return images[:max_images]
+
+
+async def _search_wikimedia(term: str, limit: int = 2) -> list[str]:
+    """Search Wikimedia Commons for images matching the term."""
+    api_url = "https://commons.wikimedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "generator": "search",
+        "gsrsearch": f"{term} illustration diagram",
+        "gsrnamespace": "6",  # File namespace
+        "gsrlimit": str(limit + 2),  # Fetch a few extra in case we filter some
+        "prop": "imageinfo",
+        "iiprop": "url|mime",
+        "iiurlwidth": "800",
+        "format": "json",
+    }
+
+    async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+        resp = await client.get(api_url, params=params)
+        if resp.status_code != 200:
+            return []
+
+        data = resp.json()
+        pages = data.get("query", {}).get("pages", {})
+        
+        urls: list[str] = []
+        for page in pages.values():
+            imageinfo = page.get("imageinfo", [{}])
+            if not imageinfo:
+                continue
+            info = imageinfo[0]
+            mime = info.get("mime", "")
+            if not mime.startswith("image/"):
+                continue
+            # Prefer the thumbnail URL (resized to 800px width)
+            thumb_url = info.get("thumburl")
+            full_url = info.get("url")
+            url = thumb_url or full_url
+            if url:
+                urls.append(url)
+            if len(urls) >= limit:
+                break
+
+        return urls
+
+
+def _generate_placeholder_svg_url(term: str) -> str:
+    """Generate a data URI SVG placeholder with the term text."""
+    clean = re.sub(r'[^a-zA-Z0-9 ]', '', term)[:40]
+    encoded = quote_plus(clean)
+    return f"https://placehold.co/800x400/2d3748/e2e8f0?text={encoded}&font=roboto"

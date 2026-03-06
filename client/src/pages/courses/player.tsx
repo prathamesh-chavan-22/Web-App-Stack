@@ -283,8 +283,8 @@ export default function CoursePlayer() {
                     {/* Result feedback */}
                     {showResult && (
                       <div className={`mt-6 p-4 rounded-lg text-sm ${selectedAnswer === currentQuestion.correct
-                          ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50"
-                          : "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/50"
+                        ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50"
+                        : "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/50"
                         }`}>
                         {selectedAnswer === currentQuestion.correct
                           ? "✅ Correct! Well done."
@@ -332,7 +332,11 @@ export default function CoursePlayer() {
                           <audio
                             controls
                             className="w-full h-8"
-                            src={(activeModule as any).audioUrl}
+                            src={
+                              (activeModule as any).audioUrl.startsWith("/static")
+                                ? `/api${(activeModule as any).audioUrl}`
+                                : (activeModule as any).audioUrl
+                            }
                             preload="none"
                           />
                         </div>

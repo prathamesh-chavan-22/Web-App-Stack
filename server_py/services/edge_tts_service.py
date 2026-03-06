@@ -17,7 +17,7 @@ async def generate_audio(text: str, filename: str) -> str:
     try:
         communicate = edge_tts.Communicate(text, VOICE)
         await communicate.save(filepath)
-        return f"/static/audio/{filename}"
+        return f"/api/static/audio/{filename}"
     except Exception as e:
         logger.error(f"Edge TTS generation failed for {filename}: {e}")
         raise

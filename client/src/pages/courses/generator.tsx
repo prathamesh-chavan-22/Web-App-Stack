@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,21 +8,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
   Loader2, Wand2, FileUp, CheckCircle2, AlertCircle,
-  Volume2, Image as ImageIcon, RefreshCw, ExternalLink,
+  Volume2, Image as ImageIcon, RefreshCw, ExternalLink, Globe,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useGenerateCourse, useCourse } from "@/hooks/use-courses";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import MarkdownContent from "@/components/markdown-content";
+import { apiRequest } from "@/lib/queryClient";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function CourseGenerator() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const searchStr = useSearch();
+  const queryClient = useQueryClient();
+
+  // Parse URL params (from analysis page "Create Course" links)
+  const params = new URLSearchParams(searchStr);
 
   const [courseData, setCourseData] = useState({
-    title: "",
+    title: params.get("title") || "",
     audience: "all",
     depth: "intermediate",
   });
@@ -31,6 +37,7 @@ export default function CourseGenerator() {
   // Track the generated course ID for polling
   const [generatingCourseId, setGeneratingCourseId] = useState<number | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const generateMutation = useGenerateCourse();
 
@@ -78,9 +85,25 @@ export default function CourseGenerator() {
     setIsPolling(false);
   };
 
+  const handlePublish = async () => {
+    if (!generatingCourseId) return;
+    setIsPublishing(true);
+    try {
+      await apiRequest("PATCH", `/api/courses/${generatingCourseId}/publish`);
+      await refetchCourse();
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      toast({ title: "Published! 🎉", description: "Course is now available in the library." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const isGenerating = isPolling || generateMutation.isPending;
   const isCompleted = genStatus === "completed";
   const isFailed = genStatus === "failed";
+  const isPublished = generatedCourse?.status === "published";
   const modules = (generatedCourse as any)?.modules || [];
 
   return (
@@ -91,14 +114,30 @@ export default function CourseGenerator() {
           <p className="text-muted-foreground">Generate comprehensive training modules powered by AI.</p>
         </div>
         {isCompleted && generatingCourseId && (
-          <Button
-            onClick={() => setLocation(`/courses/${generatingCourseId}`)}
-            data-testid="button-view-course"
-            className="shadow-lg"
-          >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            View Course
-          </Button>
+          <div className="flex gap-3">
+            {!isPublished ? (
+              <Button
+                onClick={handlePublish}
+                disabled={isPublishing}
+                className="shadow-lg bg-green-600 hover:bg-green-700"
+              >
+                {isPublishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+                Publish Course
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={handlePublish} disabled={isPublishing}>
+                {isPublishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Unpublish
+              </Button>
+            )}
+            <Button
+              onClick={() => setLocation(`/courses/${generatingCourseId}`)}
+              data-testid="button-view-course"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              View Course
+            </Button>
+          </div>
         )}
       </div>
 
@@ -231,11 +270,24 @@ export default function CourseGenerator() {
           {isCompleted && modules.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  {generatedCourse?.title || "Generated Course"}
-                </CardTitle>
-                <CardDescription>{generatedCourse?.description}</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      {generatedCourse?.title || "Generated Course"}
+                    </CardTitle>
+                    <CardDescription>{generatedCourse?.description}</CardDescription>
+                  </div>
+                  {isPublished ? (
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900/50 px-3 py-1.5 rounded-full">
+                      <Globe className="h-3 w-3" /> Published
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full">
+                      Draft
+                    </span>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="modules">
