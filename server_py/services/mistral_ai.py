@@ -1,7 +1,9 @@
 import asyncio
+import os
 import json
 import logging
 from typing import Any
+from duckduckgo_search import DDGS
 
 import httpx
 
@@ -34,6 +36,21 @@ async def _call_mistral(messages: list[dict], temperature: float = 0.3, timeout:
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
+
+
+def _web_search(query: str, max_results: int = 3) -> str:
+    """Fetch latest data from the web using DuckDuckGo search."""
+    try:
+        results = DDGS().text(query, max_results=max_results)
+        if not results:
+            return ""
+        context = []
+        for r in results:
+            context.append(f"Title: {r.get('title', '')}\nSnippet: {r.get('body', '')}")
+        return "\n\n".join(context)
+    except Exception as e:
+        logger.warning(f"Web search failed for query '{query}': {e}")
+        return ""
 
 
 async def detect_csv_columns(headers: list[str], sample_rows: list[list[str]]) -> dict[str, str]:
@@ -110,6 +127,8 @@ async def analyze_remarks(
 
 
 async def generate_course_outline(title: str, audience: str = "all", depth: str = "intermediate") -> dict:
+    search_context = _web_search(f"{title} tutorial concepts topics")
+    context_str = f"Latest web context for {title}:\n{search_context}\n\n" if search_context else ""
     messages = [
         {
             "role": "system",
@@ -128,7 +147,7 @@ async def generate_course_outline(title: str, audience: str = "all", depth: str 
         },
         {
             "role": "user",
-            "content": f"Create a course outline for: {title}",
+            "content": f"{context_str}Create a course outline for: {title}",
         },
     ]
 
@@ -140,6 +159,8 @@ async def generate_chapter_content(
     course_title: str, chapter_title: str, chapter_summary: str,
     audience: str = "all", depth: str = "intermediate"
 ) -> dict:
+    search_context = _web_search(f"{course_title} {chapter_title} {chapter_summary}")
+    context_str = f"Latest web context:\n{search_context}\n\n" if search_context else ""
     messages = [
         {
             "role": "system",
@@ -164,10 +185,11 @@ async def generate_chapter_content(
         {
             "role": "user",
             "content": (
+                f"{context_str}"
                 f"Course: {course_title}\n"
                 f"Chapter: {chapter_title}\n"
                 f"Summary: {chapter_summary}\n\n"
-                "Write the full chapter content."
+                "Write the full chapter content based on the provided topic and latest web context."
             ),
         },
     ]

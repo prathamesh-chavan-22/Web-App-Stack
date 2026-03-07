@@ -12,7 +12,6 @@ from schemas import (
 )
 import storage
 from services.mistral_ai import generate_course_outline, generate_chapter_content
-from services.image_service import fetch_images_for_chapter
 from services.edge_tts_service import generate_audio
 
 logger = logging.getLogger(__name__)
@@ -70,17 +69,8 @@ async def _generate_course_pipeline(course_id: int, title: str, audience: str, d
                     depth,
                 )
 
-                # Fetch images
-                search_terms = chapter.get("search_terms", [chapter["title"]])
-                images = await fetch_images_for_chapter(search_terms, max_images=3)
-
                 # Insert images into markdown content if we got any
                 content = chapter_data.get("content", "")
-                if images:
-                    img_section = "\n\n---\n\n### 📷 Visual References\n\n"
-                    for img_url in images:
-                        img_section += f"![Illustration]({img_url})\n\n"
-                    content += img_section
 
                 # Save module
                 quiz_json = json.dumps(chapter_data.get("quiz", {})) if chapter_data.get("quiz") else None
@@ -91,7 +81,7 @@ async def _generate_course_pipeline(course_id: int, title: str, audience: str, d
                     content=content,
                     sort_order=i,
                     quiz=quiz_json,
-                    images=images,
+                    images=[],
                 )
                 module_ids.append(module.id)
                 tts_scripts.append(chapter_data.get("tts_script", ""))
@@ -185,6 +175,22 @@ async def generate_course(
     return CourseOut.model_validate(course).model_dump(by_alias=True)
 
 
+@router.get("/image-proxy")
+async def image_proxy(url: str):
+    """Download an external image, cache locally, and redirect to the local copy."""
+    from fastapi.responses import RedirectResponse
+
+    if not url.startswith("http"):
+        return Response(content='{"message":"Invalid URL"}', status_code=400, media_type="application/json")
+
+    local_path = await proxy_and_cache_image(url)
+    if local_path:
+        return RedirectResponse(url=f"/api{local_path}", status_code=302)
+
+    # If download failed, try to redirect directly (fallback)
+    return RedirectResponse(url=url, status_code=302)
+
+
 @router.get("/{course_id}")
 async def get_course(course_id: int, db: AsyncSession = Depends(get_db)):
     data = await storage.get_course(db, course_id)
@@ -246,3 +252,4 @@ async def create_module(course_id: int, body: CreateModule, db: AsyncSession = D
         content=body.content, sort_order=body.sort_order, quiz=body.quiz,
     )
     return CourseModuleOut.model_validate(module).model_dump(by_alias=True)
+

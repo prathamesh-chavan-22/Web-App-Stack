@@ -46,33 +46,8 @@ const components: Components = {
         );
     },
 
-    img({ src, alt, ...props }) {
-        return (
-            <figure className="my-6">
-                <img
-                    src={src}
-                    alt={alt || ""}
-                    className="rounded-lg border border-border/50 shadow-sm max-w-full h-auto mx-auto"
-                    loading="lazy"
-                    onError={(e) => {
-                        // If the external image fails (e.g. blocked by adblocker), show a fallback instead of hiding
-                        const target = e.target as HTMLImageElement;
-                        // To avoid infinite loop, only set it once
-                        if (!target.src.includes('images.unsplash.com')) {
-                            target.src = "https://images.unsplash.com/photo-1546410531-ee4cs288152"; // Reliable fallback image
-                        } else {
-                            target.style.display = "none";
-                        }
-                    }}
-                    {...props}
-                />
-                {alt && (
-                    <figcaption className="text-center text-xs text-muted-foreground mt-2">
-                        {alt}
-                    </figcaption>
-                )}
-            </figure>
-        );
+    img() {
+        return null; // Images are intentionally removed as per user request
     },
 
     table({ children, ...props }) {
