@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User, Bell, Lock, Globe, CheckCircle2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUpdateLanguage } from "@/hooks/use-speaking";
 
 export default function Settings() {
     const { user } = useAuth();
@@ -20,6 +21,8 @@ export default function Settings() {
     const currentPassRef = useRef<HTMLInputElement>(null);
     const newPassRef = useRef<HTMLInputElement>(null);
     const confirmPassRef = useRef<HTMLInputElement>(null);
+    const [speakingLanguage, setSpeakingLanguage] = useState(user?.preferredLanguage || "en");
+    const updateLanguage = useUpdateLanguage();
 
     if (!user) return null;
 
@@ -193,6 +196,45 @@ export default function Settings() {
                                     </SelectContent>
                                 </Select>
                             </div>
+                            
+                            <div className="border-t pt-6">
+                                <h4 className="font-semibold mb-4">Speaking Practice Language</h4>
+                                <div className="space-y-2">
+                                    <Label>Primary Language for Prompts & Feedback</Label>
+                                    <Select 
+                                        value={speakingLanguage} 
+                                        onValueChange={(value) => {
+                                            setSpeakingLanguage(value);
+                                            updateLanguage.mutate(value, {
+                                                onSuccess: () => {
+                                                    toast({
+                                                        title: "Language Updated",
+                                                        description: "Your speaking practice language has been updated successfully."
+                                                    });
+                                                },
+                                                onError: () => {
+                                                    toast({
+                                                        variant: "destructive",
+                                                        title: "Update Failed",
+                                                        description: "Failed to update language preference. Please try again."
+                                                    });
+                                                }
+                                            });
+                                        }}
+                                    >
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="en">English</SelectItem>
+                                            <SelectItem value="hi">हिंदी (Hindi)</SelectItem>
+                                            <SelectItem value="mr">मराठी (Marathi)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-sm text-muted-foreground">
+                                        This language will be used for lesson prompts, voice guidance, and AI feedback in speaking practice.
+                                    </p>
+                                </div>
+                            </div>
+                            
                             <div className="space-y-2">
                                 <Label>Timezone</Label>
                                 <Select defaultValue="est">

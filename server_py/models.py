@@ -17,6 +17,7 @@ class User(Base):
     password: Mapped[str] = mapped_column(Text, nullable=False)
     full_name: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False, server_default="employee")
+    preferred_language: Mapped[Optional[str]] = mapped_column(Text, nullable=True, server_default="en")
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -85,16 +86,60 @@ class Notification(Base):
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
 
 
+class SpeakingTopic(Base):
+    __tablename__ = "speaking_topics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    icon: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+
+
+class SpeakingLesson(Base):
+    __tablename__ = "speaking_lessons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    topic_id: Mapped[int] = mapped_column(Integer, ForeignKey("speaking_topics.id"), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    difficulty_level: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-5
+    prompt_template_en: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_template_hi: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prompt_template_mr: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    target_vocabulary: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    example_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+
+
+class UserLessonProgress(Base):
+    __tablename__ = "user_lesson_progress"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    lesson_id: Mapped[int] = mapped_column(Integer, ForeignKey("speaking_lessons.id"), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    best_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    completed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    last_practiced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class SpeakingPractice(Base):
     __tablename__ = "speaking_practices"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
+    lesson_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("speaking_lessons.id"), nullable=True)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     transcript: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     audio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     pronunciation_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     fluency_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    vocabulary_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    grammar_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     corrections: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())

@@ -11,7 +11,10 @@ import Dashboard from "./pages/dashboard/index";
 import CoursesList from "./pages/courses/index";
 import CourseGenerator from "./pages/courses/generator";
 import CoursePlayer from "./pages/courses/player";
-import SpeakingCoach from "./pages/speaking/index";
+import SpeakingTopics from "./pages/speaking/topics";
+import TopicLessons from "./pages/speaking/lessons";
+import SpeakingPractice from "./pages/speaking/practice";
+import SpeakingProgress from "./pages/speaking/progress";
 import TeamManagement from "./pages/team/index";
 import Analysis from "./pages/analysis/index";
 import Assessments from "./pages/assessments/index";
@@ -45,7 +48,11 @@ function Router() {
       <ProtectedRoute path="/learning" component={CoursesList} />
       <ProtectedRoute path="/generator" component={CourseGenerator} />
       <ProtectedRoute path="/courses/:id" component={CoursePlayer} />
-      <ProtectedRoute path="/speaking" component={SpeakingCoach} />
+      <ProtectedRoute path="/speaking" component={() => <Redirect to="/speaking/topics" />} />
+      <ProtectedRoute path="/speaking/topics" component={SpeakingTopics} />
+      <ProtectedRoute path="/speaking/topics/:id" component={TopicLessons} />
+      <ProtectedRoute path="/speaking/practice/:id" component={SpeakingPractice} />
+      <ProtectedRoute path="/speaking/progress" component={SpeakingProgress} />
       <ProtectedRoute path="/team" component={TeamManagement} />
 
       <Route component={NotFound} />

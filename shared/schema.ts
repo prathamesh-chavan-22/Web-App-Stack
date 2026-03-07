@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
   role: text("role").notNull().default("employee"), // 'l_and_d', 'manager', 'employee'
+  preferredLanguage: text("preferred_language").default("en"), // 'en', 'hi', 'mr'
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -56,14 +57,52 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const speakingTopics = pgTable("speaking_topics", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  icon: text("icon"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const speakingLessons = pgTable("speaking_lessons", {
+  id: serial("id").primaryKey(),
+  topicId: integer("topic_id").references(() => speakingTopics.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  difficultyLevel: integer("difficulty_level").notNull(), // 1-5
+  promptTemplateEn: text("prompt_template_en").notNull(),
+  promptTemplateHi: text("prompt_template_hi"),
+  promptTemplateMr: text("prompt_template_mr"),
+  targetVocabulary: json("target_vocabulary"),
+  exampleResponse: text("example_response"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const userLessonProgress = pgTable("user_lesson_progress", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  lessonId: integer("lesson_id").references(() => speakingLessons.id).notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  bestScore: doublePrecision("best_score"),
+  completed: boolean("completed").notNull().default(false),
+  lastPracticedAt: timestamp("last_practiced_at"),
+  completedAt: timestamp("completed_at"),
+});
+
 export const speakingPractices = pgTable("speaking_practices", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
+  lessonId: integer("lesson_id").references(() => speakingLessons.id),
   prompt: text("prompt").notNull(),
   transcript: text("transcript"),
   audioUrl: text("audio_url"),
   pronunciationScore: doublePrecision("pronunciation_score"),
   fluencyScore: doublePrecision("fluency_score"),
+  vocabularyScore: doublePrecision("vocabulary_score"),
+  grammarScore: doublePrecision("grammar_score"),
   feedback: text("feedback"),
   corrections: text("corrections"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -98,6 +137,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   enrollments: many(enrollments),
   notifications: many(notifications),
   speakingPractices: many(speakingPractices),
+  lessonProgress: many(userLessonProgress),
 }));
 
 export const coursesRelations = relations(courses, ({ one, many }) => ({
@@ -121,6 +161,22 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 
 export const speakingPracticesRelations = relations(speakingPractices, ({ one }) => ({
   user: one(users, { fields: [speakingPractices.userId], references: [users.id] }),
+  lesson: one(speakingLessons, { fields: [speakingPractices.lessonId], references: [speakingLessons.id] }),
+}));
+
+export const speakingTopicsRelations = relations(speakingTopics, ({ many }) => ({
+  lessons: many(speakingLessons),
+}));
+
+export const speakingLessonsRelations = relations(speakingLessons, ({ one, many }) => ({
+  topic: one(speakingTopics, { fields: [speakingLessons.topicId], references: [speakingTopics.id] }),
+  practices: many(speakingPractices),
+  progress: many(userLessonProgress),
+}));
+
+export const userLessonProgressRelations = relations(userLessonProgress, ({ one }) => ({
+  user: one(users, { fields: [userLessonProgress.userId], references: [users.id] }),
+  lesson: one(speakingLessons, { fields: [userLessonProgress.lessonId], references: [speakingLessons.id] }),
 }));
 
 export const workflowAnalysesRelations = relations(workflowAnalyses, ({ one, many }) => ({
@@ -138,6 +194,9 @@ export const insertCourseModuleSchema = createInsertSchema(courseModules).omit({
 export const insertEnrollmentSchema = createInsertSchema(enrollments).omit({ id: true, startedAt: true, completedAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertSpeakingPracticeSchema = createInsertSchema(speakingPractices).omit({ id: true, createdAt: true });
+export const insertSpeakingTopicSchema = createInsertSchema(speakingTopics).omit({ id: true, createdAt: true });
+export const insertSpeakingLessonSchema = createInsertSchema(speakingLessons).omit({ id: true, createdAt: true });
+export const insertUserLessonProgressSchema = createInsertSchema(userLessonProgress).omit({ id: true });
 
 export const insertWorkflowAnalysisSchema = createInsertSchema(workflowAnalyses).omit({ id: true, createdAt: true, completedAt: true });
 export const insertAnalysisResultSchema = createInsertSchema(analysisResults).omit({ id: true, createdAt: true });
@@ -154,6 +213,12 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type SpeakingPractice = typeof speakingPractices.$inferSelect;
 export type InsertSpeakingPractice = z.infer<typeof insertSpeakingPracticeSchema>;
+export type SpeakingTopic = typeof speakingTopics.$inferSelect;
+export type InsertSpeakingTopic = z.infer<typeof insertSpeakingTopicSchema>;
+export type SpeakingLesson = typeof speakingLessons.$inferSelect;
+export type InsertSpeakingLesson = z.infer<typeof insertSpeakingLessonSchema>;
+export type UserLessonProgress = typeof userLessonProgress.$inferSelect;
+export type InsertUserLessonProgress = z.infer<typeof insertUserLessonProgressSchema>;
 
 export type WorkflowAnalysis = typeof workflowAnalyses.$inferSelect;
 export type InsertWorkflowAnalysis = z.infer<typeof insertWorkflowAnalysisSchema>;

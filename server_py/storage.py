@@ -4,7 +4,7 @@ from typing import Optional, List
 from sqlalchemy import select, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import User, Course, CourseModule, CourseConceptGraph, Enrollment, Notification, SpeakingPractice, WorkflowAnalysis, AnalysisResult, LearnerProfile, TutorMessage
+from models import User, Course, CourseModule, CourseConceptGraph, Enrollment, Notification, SpeakingPractice, SpeakingTopic, SpeakingLesson, UserLessonProgress, WorkflowAnalysis, AnalysisResult, LearnerProfile, TutorMessage
 
 
 # --- Users ---
@@ -265,17 +265,183 @@ async def create_speaking_practice(db: AsyncSession, *, user_id: int, prompt: st
                                    transcript: str | None = None, audio_url: str | None = None,
                                    pronunciation_score: float | None = None,
                                    fluency_score: float | None = None,
+                                   vocabulary_score: float | None = None,
+                                   grammar_score: float | None = None,
                                    feedback: str | None = None,
-                                   corrections: str | None = None) -> SpeakingPractice:
+                                   corrections: str | None = None,
+                                   lesson_id: int | None = None) -> SpeakingPractice:
     practice = SpeakingPractice(
         user_id=user_id, prompt=prompt, transcript=transcript, audio_url=audio_url,
         pronunciation_score=pronunciation_score, fluency_score=fluency_score,
-        feedback=feedback, corrections=corrections,
+        vocabulary_score=vocabulary_score, grammar_score=grammar_score,
+        feedback=feedback, corrections=corrections, lesson_id=lesson_id,
     )
     db.add(practice)
     await db.commit()
     await db.refresh(practice)
     return practice
+
+
+# --- Speaking Topics ---
+
+
+async def get_speaking_topics(db: AsyncSession) -> List[SpeakingTopic]:
+    result = await db.execute(
+        select(SpeakingTopic).order_by(SpeakingTopic.sort_order)
+    )
+    return list(result.scalars().all())
+
+
+async def get_speaking_topic(db: AsyncSession, topic_id: int) -> SpeakingTopic | None:
+    result = await db.execute(
+        select(SpeakingTopic).where(SpeakingTopic.id == topic_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_speaking_topic(db: AsyncSession, *, name: str, description: str,
+                                icon: str | None = None, sort_order: int = 0) -> SpeakingTopic:
+    topic = SpeakingTopic(
+        name=name, description=description, icon=icon, sort_order=sort_order
+    )
+    db.add(topic)
+    await db.commit()
+    await db.refresh(topic)
+    return topic
+
+
+# --- Speaking Lessons ---
+
+
+async def get_speaking_lessons(db: AsyncSession, topic_id: int | None = None,
+                               difficulty_level: int | None = None) -> List[SpeakingLesson]:
+    query = select(SpeakingLesson)
+    if topic_id is not None:
+        query = query.where(SpeakingLesson.topic_id == topic_id)
+    if difficulty_level is not None:
+        query = query.where(SpeakingLesson.difficulty_level == difficulty_level)
+    query = query.order_by(SpeakingLesson.sort_order)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_speaking_lesson(db: AsyncSession, lesson_id: int) -> SpeakingLesson | None:
+    result = await db.execute(
+        select(SpeakingLesson).where(SpeakingLesson.id == lesson_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_speaking_lesson(db: AsyncSession, *, topic_id: int, title: str,
+                                 description: str, difficulty_level: int,
+                                 prompt_template_en: str, prompt_template_hi: str | None = None,
+                                 prompt_template_mr: str | None = None,
+                                 target_vocabulary: list | None = None,
+                                 example_response: str | None = None,
+                                 sort_order: int = 0) -> SpeakingLesson:
+    lesson = SpeakingLesson(
+        topic_id=topic_id, title=title, description=description,
+        difficulty_level=difficulty_level, prompt_template_en=prompt_template_en,
+        prompt_template_hi=prompt_template_hi, prompt_template_mr=prompt_template_mr,
+        target_vocabulary=target_vocabulary, example_response=example_response,
+        sort_order=sort_order
+    )
+    db.add(lesson)
+    await db.commit()
+    await db.refresh(lesson)
+    return lesson
+
+
+# --- User Lesson Progress ---
+
+
+async def get_user_lesson_progress(db: AsyncSession, user_id: int,
+                                   lesson_id: int | None = None) -> List[UserLessonProgress]:
+    query = select(UserLessonProgress).where(UserLessonProgress.user_id == user_id)
+    if lesson_id is not None:
+        query = query.where(UserLessonProgress.lesson_id == lesson_id)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_or_create_lesson_progress(db: AsyncSession, user_id: int,
+                                        lesson_id: int) -> UserLessonProgress:
+    result = await db.execute(
+        select(UserLessonProgress).where(
+            UserLessonProgress.user_id == user_id,
+            UserLessonProgress.lesson_id == lesson_id
+        )
+    )
+    progress = result.scalar_one_or_none()
+    if not progress:
+        progress = UserLessonProgress(
+            user_id=user_id, lesson_id=lesson_id, attempts=0, completed=False
+        )
+        db.add(progress)
+        await db.commit()
+        await db.refresh(progress)
+    return progress
+
+
+async def update_lesson_progress(db: AsyncSession, user_id: int, lesson_id: int,
+                                 score: float) -> UserLessonProgress:
+    progress = await get_or_create_lesson_progress(db, user_id, lesson_id)
+    progress.attempts += 1
+    progress.last_practiced_at = datetime.now()
+    
+    # Update best score if this is better
+    if progress.best_score is None or score > progress.best_score:
+        progress.best_score = score
+    
+    # Mark as completed if score is 70% or higher
+    if score >= 70.0 and not progress.completed:
+        progress.completed = True
+        progress.completed_at = datetime.now()
+    
+    await db.commit()
+    await db.refresh(progress)
+    return progress
+
+
+async def get_topic_progress(db: AsyncSession, user_id: int, topic_id: int) -> dict:
+    """Get progress summary for a topic."""
+    # Get all lessons for this topic
+    lessons = await get_speaking_lessons(db, topic_id=topic_id)
+    lesson_ids = [lesson.id for lesson in lessons]
+    
+    # Get progress for these lessons
+    result = await db.execute(
+        select(UserLessonProgress).where(
+            UserLessonProgress.user_id == user_id,
+            UserLessonProgress.lesson_id.in_(lesson_ids)
+        )
+    )
+    progress_records = list(result.scalars().all())
+    
+    total_lessons = len(lessons)
+    completed_lessons = sum(1 for p in progress_records if p.completed)
+    avg_score = sum(p.best_score for p in progress_records if p.best_score) / len(progress_records) if progress_records else 0
+    
+    return {
+        "total_lessons": total_lessons,
+        "completed_lessons": completed_lessons,
+        "completion_pct": (completed_lessons / total_lessons * 100) if total_lessons > 0 else 0,
+        "avg_score": avg_score,
+    }
+
+
+# --- User Language Preference ---
+
+
+async def update_user_language(db: AsyncSession, user_id: int, language: str) -> User | None:
+    result = await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(preferred_language=language)
+        .returning(User)
+    )
+    await db.commit()
+    return result.scalar_one_or_none()
 
 
 # --- Workflow Analysis ---

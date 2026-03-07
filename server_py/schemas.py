@@ -22,6 +22,7 @@ class UserOut(CamelModel):
     password: str
     full_name: str
     role: str
+    preferred_language: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -96,14 +97,52 @@ class NotificationOut(CamelModel):
 class SpeakingPracticeOut(CamelModel):
     id: int
     user_id: Optional[int] = None
+    lesson_id: Optional[int] = None
     prompt: str
     transcript: Optional[str] = None
     audio_url: Optional[str] = None
     pronunciation_score: Optional[float] = None
     fluency_score: Optional[float] = None
+    vocabulary_score: Optional[float] = None
+    grammar_score: Optional[float] = None
     feedback: Optional[str] = None
     corrections: Optional[str] = None
     created_at: Optional[datetime] = None
+
+
+class SpeakingTopicOut(CamelModel):
+    id: int
+    name: str
+    description: str
+    icon: Optional[str] = None
+    sort_order: int
+    created_at: Optional[datetime] = None
+
+
+class SpeakingLessonOut(CamelModel):
+    id: int
+    topic_id: int
+    title: str
+    description: str
+    difficulty_level: int
+    prompt_template_en: str
+    prompt_template_hi: Optional[str] = None
+    prompt_template_mr: Optional[str] = None
+    target_vocabulary: Optional[List[str]] = None
+    example_response: Optional[str] = None
+    sort_order: int
+    created_at: Optional[datetime] = None
+
+
+class UserLessonProgressOut(CamelModel):
+    id: int
+    user_id: int
+    lesson_id: int
+    attempts: int
+    best_score: Optional[float] = None
+    completed: bool
+    last_practiced_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
 
 # --- Input models ---
@@ -157,13 +196,40 @@ class UpdateProgress(CamelModel):
 
 
 class CreateSpeakingPractice(CamelModel):
+    lesson_id: Optional[int] = None
     prompt: str
     transcript: Optional[str] = None
     audio_url: Optional[str] = None
     pronunciation_score: Optional[float] = None
     fluency_score: Optional[float] = None
+    vocabulary_score: Optional[float] = None
+    grammar_score: Optional[float] = None
     feedback: Optional[str] = None
     corrections: Optional[str] = None
+
+
+class CreateSpeakingTopic(CamelModel):
+    name: str
+    description: str
+    icon: Optional[str] = None
+    sort_order: int = 0
+
+
+class CreateSpeakingLesson(CamelModel):
+    topic_id: int
+    title: str
+    description: str
+    difficulty_level: int
+    prompt_template_en: str
+    prompt_template_hi: Optional[str] = None
+    prompt_template_mr: Optional[str] = None
+    target_vocabulary: Optional[List[str]] = None
+    example_response: Optional[str] = None
+    sort_order: int = 0
+
+
+class UpdateUserLanguage(CamelModel):
+    preferred_language: str  # 'en', 'hi', 'mr'
 
 
 class ErrorResponse(BaseModel):

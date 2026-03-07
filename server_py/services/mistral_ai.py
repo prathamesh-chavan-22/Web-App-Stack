@@ -199,18 +199,47 @@ async def generate_chapter_content(
     return json.loads(raw)
 
 
-async def analyze_speaking_transcript(prompt: str, transcript: str) -> dict:
-    """Analyze a speaking transcript and return scores + feedback."""
+async def analyze_speaking_transcript(prompt: str, transcript: str, language: str = "en",
+                                      target_vocabulary: list[str] | None = None) -> dict:
+    """Analyze a speaking transcript and return scores + feedback.
+    
+    Args:
+        prompt: The speaking prompt given to the user
+        transcript: The user's spoken response (transcribed)
+        language: Language for feedback ('en', 'hi', 'mr')
+        target_vocabulary: Optional list of vocabulary words expected in the response
+    
+    Returns:
+        Dictionary with pronunciation_score, fluency_score, vocabulary_score, 
+        grammar_score, feedback, and corrections
+    """
+    # Language-specific instructions
+    lang_instructions = {
+        "en": "Provide feedback in English.",
+        "hi": "कृपया हिंदी में प्रतिक्रिया दें। (Please provide feedback in Hindi.)",
+        "mr": "कृपया मराठीत अभिप्राय द्या। (Please provide feedback in Marathi.)",
+    }
+    
+    instruction = lang_instructions.get(language, lang_instructions["en"])
+    vocab_context = ""
+    if target_vocabulary:
+        vocab_context = f"\nTarget vocabulary words: {', '.join(target_vocabulary)}"
+    
     messages = [
         {
             "role": "system",
             "content": (
-                "You are an English speaking coach. Analyze the given transcript in response to the prompt. "
+                "You are an English speaking coach helping learners improve their English. "
+                "Analyze the given transcript in response to the prompt. "
+                f"{instruction}\n\n"
                 "Return a JSON object with:\n"
-                "- \"pronunciation_score\": float 0-100 (estimate based on word choice and structure)\n"
-                "- \"fluency_score\": float 0-100 (based on sentence flow, vocabulary, coherence)\n"
-                "- \"feedback\": string with 2-3 sentences of constructive feedback\n"
-                "- \"corrections\": string with 1-2 specific corrections or suggestions for improvement"
+                '- "pronunciation_score": float 0-100 (estimate based on word choice and complexity)\n'
+                '- "fluency_score": float 0-100 (based on sentence flow, coherence, natural expression)\n'
+                '- "vocabulary_score": float 0-100 (based on word variety, appropriateness, and use of target vocabulary)\n'
+                '- "grammar_score": float 0-100 (based on sentence structure, tense usage, and grammatical accuracy)\n'
+                '- "feedback": string with 2-4 sentences of constructive feedback in the specified language\n'
+                '- "corrections": string with 1-3 specific corrections or suggestions for improvement in the specified language'
+                f"{vocab_context}"
             ),
         },
         {
@@ -223,6 +252,8 @@ async def analyze_speaking_transcript(prompt: str, transcript: str) -> dict:
     return {
         "pronunciation_score": float(result.get("pronunciation_score", 75.0)),
         "fluency_score": float(result.get("fluency_score", 75.0)),
+        "vocabulary_score": float(result.get("vocabulary_score", 75.0)),
+        "grammar_score": float(result.get("grammar_score", 75.0)),
         "feedback": str(result.get("feedback", "Good effort! Keep practicing.")),
         "corrections": str(result.get("corrections", "")),
     }
