@@ -6,13 +6,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import PORT
-from database import async_session_factory
+from database import async_session_factory, engine
 from session import create_session_table
 from seed import seed_database
 
-from routers import auth, users, courses, enrollments, notifications, speaking, analysis, tutor
+from routers import auth, users, courses, enrollments, notifications, speaking, analysis, tutor, analytics, assessments
 
 
 @asynccontextmanager
@@ -58,6 +59,26 @@ app.include_router(notifications.router)
 app.include_router(speaking.router)
 app.include_router(analysis.router)
 app.include_router(tutor.router)
+app.include_router(analytics.router)
+app.include_router(assessments.router)
+
+
+# Admin: reset + re-seed database
+@app.post("/api/admin/reset-db")
+async def reset_db():
+    """Drop all tables, recreate schema, and re-seed."""
+    from models import Base
+    # Drop and recreate all tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    # Recreate session table
+    await create_session_table()
+    # Re-seed
+    async with async_session_factory() as db:
+        await seed_database(db)
+    return {"message": "Database reset and re-seeded successfully."}
+
 
 # Static files for generated audio
 static_dir = os.path.join(os.path.dirname(__file__), "static")

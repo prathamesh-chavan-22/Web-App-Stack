@@ -1,6 +1,95 @@
+import json
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import storage
+
+
+QUIZ_REACT_COMPONENTS = json.dumps({"questions": [
+    {"q": "What is the correct way to define a functional React component?",
+     "options": ["class MyComp extends React", "function MyComp() { return <div/> }", "const MyComp = React.create()", "MyComp.render = () => <div/>"],
+     "correct": 1},
+    {"q": "Which attribute replaces 'class' in JSX?", "options": ["cssClass", "className", "htmlClass", "styleClass"], "correct": 1},
+    {"q": "What does JSX stand for?", "options": ["JavaScript Xtended", "JavaScript XML", "Java Syntax Extension", "JSON XML"], "correct": 1},
+]})
+
+QUIZ_REACT_STATE = json.dumps({"questions": [
+    {"q": "Props in React are:", "options": ["Mutable data owned by child", "Read-only inputs from parent", "Global state", "Event handlers"], "correct": 1},
+    {"q": "Which hook manages local state?", "options": ["useEffect", "useContext", "useState", "useMemo"], "correct": 2},
+    {"q": "When does a component re-render due to state?", "options": ["Never", "When setState is called", "When props change", "Both B and C"], "correct": 3},
+]})
+
+QUIZ_REACT_HOOKS = json.dumps({"questions": [
+    {"q": "useEffect runs:", "options": ["Before render", "After render", "During render", "Only once ever"], "correct": 1},
+    {"q": "What is the purpose of useCallback?", "options": ["Fetch data", "Memoize function references", "Create context", "Handle form submit"], "correct": 1},
+    {"q": "Rule of Hooks: hooks must be called:", "options": ["Inside loops", "At the top level", "In class components", "Inside conditionals"], "correct": 1},
+]})
+
+QUIZ_PYTHON_VARS = json.dumps({"questions": [
+    {"q": "What type is `x = 3.14` in Python?", "options": ["int", "str", "float", "complex"], "correct": 2},
+    {"q": "Which data type is ordered and mutable?", "options": ["tuple", "set", "dict", "list"], "correct": 3},
+    {"q": "What does len('hello') return?", "options": ["4", "5", "6", "Error"], "correct": 1},
+]})
+
+QUIZ_PYTHON_FLOW = json.dumps({"questions": [
+    {"q": "Which loop iterates a fixed number of times?", "options": ["while", "for", "do-while", "foreach"], "correct": 1},
+    {"q": "What does `range(5)` produce?", "options": ["[1,2,3,4,5]", "[0,1,2,3,4]", "[0,1,2,3,4,5]", "5"], "correct": 1},
+    {"q": "List comprehension `[x*2 for x in range(3)]` gives:", "options": ["[0,2,4]", "[2,4,6]", "[1,2,3]", "[0,1,2]"], "correct": 0},
+]})
+
+QUIZ_PYTHON_FUNCS = json.dumps({"questions": [
+    {"q": "Which keyword defines a function?", "options": ["func", "def", "fn", "function"], "correct": 1},
+    {"q": "*args captures:", "options": ["Keyword arguments", "Required args only", "Positional arguments", "All global vars"], "correct": 2},
+    {"q": "**kwargs captures:", "options": ["Positional args", "Keyword arguments as dict", "Default values", "Module imports"], "correct": 1},
+]})
+
+QUIZ_DS_PANDAS = json.dumps({"questions": [
+    {"q": "Which method shows the first 5 rows of a DataFrame?", "options": ["df.tail()", "df.head()", "df.first()", "df.peek()"], "correct": 1},
+    {"q": "How do you drop rows with NaN?", "options": ["df.fillna()", "df.dropna()", "df.clean()", "df.remove_nan()"], "correct": 1},
+    {"q": "df.shape returns:", "options": ["Column names", "Row count only", "(rows, columns) tuple", "Data types"], "correct": 2},
+]})
+
+QUIZ_DS_VIZ = json.dumps({"questions": [
+    {"q": "Which chart is best for showing trends over time?", "options": ["Pie chart", "Bar chart", "Line chart", "Scatter plot"], "correct": 2},
+    {"q": "Which library provides the histplot function?", "options": ["matplotlib", "numpy", "seaborn", "pandas"], "correct": 2},
+    {"q": "sns.heatmap is used for:", "options": ["Time series", "Correlation matrices", "Maps", "3D plots"], "correct": 1},
+]})
+
+QUIZ_CLOUD_CONCEPTS = json.dumps({"questions": [
+    {"q": "What does IaaS stand for?", "options": ["Internet as a Service", "Infrastructure as a Service", "Integration as a Service", "Intelligence as a Service"], "correct": 1},
+    {"q": "Public cloud is:", "options": ["Dedicated to one org", "Shared infrastructure", "On-premises only", "Always free"], "correct": 1},
+    {"q": "Pay-as-you-go is a benefit of:", "options": ["On-premises", "Cloud computing", "Mainframes", "Private servers"], "correct": 1},
+]})
+
+QUIZ_CLOUD_AWS = json.dumps({"questions": [
+    {"q": "What is AWS EC2?", "options": ["Object storage", "Virtual servers", "DNS service", "Email service"], "correct": 1},
+    {"q": "S3 is used for:", "options": ["Compute", "Networking", "Object storage", "Database"], "correct": 2},
+    {"q": "AWS Lambda is:", "options": ["Container service", "Serverless compute", "Managed database", "Load balancer"], "correct": 1},
+]})
+
+QUIZ_CLOUD_DEPLOY = json.dumps({"questions": [
+    {"q": "What is a Dockerfile?", "options": ["A cloud config", "A container build recipe", "A CI/CD pipeline", "A DNS record"], "correct": 1},
+    {"q": "ECS with Fargate provides:", "options": ["Managed Kubernetes", "Serverless container orchestration", "Load balancing only", "Static hosting"], "correct": 1},
+    {"q": "Which tool is AWS-native CI/CD for deployment?", "options": ["Jenkins", "CircleCI", "CodeDeploy", "TravisCI"], "correct": 2},
+]})
+
+QUIZ_SEC_THREATS = json.dumps({"questions": [
+    {"q": "What is phishing?", "options": ["A network attack", "Deceptive emails to steal credentials", "Malware injection", "DoS attack"], "correct": 1},
+    {"q": "Which stands for Confidentiality, Integrity, Availability?", "options": ["CIS", "CISA", "CIA Triad", "CVSS"], "correct": 2},
+    {"q": "SQL Injection exploits:", "options": ["Network packets", "Database queries", "File uploads", "Email servers"], "correct": 1},
+]})
+
+QUIZ_SEC_NETWORK = json.dumps({"questions": [
+    {"q": "TLS/SSL is used to:", "options": ["Compress data", "Encrypt web traffic", "Route packets", "Monitor logs"], "correct": 1},
+    {"q": "VPN creates:", "options": ["A public hotspot", "An encrypted tunnel", "A firewall rule", "A DMZ zone"], "correct": 1},
+    {"q": "Zero Trust principle is:", "options": ["Trust all internal traffic", "Never trust, always verify", "Trust encrypted traffic", "Trust verified IPs"], "correct": 1},
+]})
+
+QUIZ_SEC_PRACTICES = json.dumps({"questions": [
+    {"q": "Bcrypt is used for:", "options": ["Encrypting disks", "Hashing passwords", "Compressing files", "Network encryption"], "correct": 1},
+    {"q": "RBAC stands for:", "options": ["Role-Based Access Control", "Remote Backup And Control", "Real-time Binary Access Control", "Rule-Based Admin Config"], "correct": 0},
+    {"q": "OWASP Top 10 item #1 (2021) is:", "options": ["SQL Injection", "Broken Access Control", "XSS", "CSRF"], "correct": 1},
+]})
 
 
 async def seed_database(db: AsyncSession):
@@ -42,6 +131,7 @@ async def seed_database(db: AsyncSession):
     )
     await storage.create_course_module(
         db, course_id=c1.id, title="Components & JSX", sort_order=1,
+        quiz=QUIZ_REACT_COMPONENTS,
         content="""## What Are React Components?
 
 React components are the fundamental building blocks of any React application. A component is a reusable piece of UI that can accept inputs (called **props**) and return React elements describing what should appear on the screen.
@@ -82,6 +172,7 @@ function App() {
     )
     await storage.create_course_module(
         db, course_id=c1.id, title="State & Props", sort_order=2,
+        quiz=QUIZ_REACT_STATE,
         content="""## Understanding Props
 
 Props (short for "properties") are read-only inputs passed from a parent component to a child. They allow data to flow **downward** through the component tree.
@@ -128,6 +219,7 @@ function Counter() {
     )
     await storage.create_course_module(
         db, course_id=c1.id, title="React Hooks", sort_order=3,
+        quiz=QUIZ_REACT_HOOKS,
         content="""## Introduction to Hooks
 
 Hooks are functions that let you "hook into" React features from functional components. They were introduced in React 16.8.
@@ -176,6 +268,7 @@ Context provides a way to pass data through the component tree without prop dril
     )
     await storage.create_course_module(
         db, course_id=c2.id, title="Variables & Data Types", sort_order=1,
+        quiz=QUIZ_PYTHON_VARS,
         content="""## Getting Started with Python
 
 Python is known for its clean, readable syntax. Let's start with the basics.
@@ -213,6 +306,7 @@ print(len(greeting))        # 13
     )
     await storage.create_course_module(
         db, course_id=c2.id, title="Control Flow", sort_order=2,
+        quiz=QUIZ_PYTHON_FLOW,
         content="""## Making Decisions with Conditionals
 
 ### if / elif / else
@@ -266,6 +360,7 @@ evens = [x for x in range(20) if x % 2 == 0]
     )
     await storage.create_course_module(
         db, course_id=c2.id, title="Functions & Modules", sort_order=3,
+        quiz=QUIZ_PYTHON_FUNCS,
         content="""## Defining Functions
 
 Functions are reusable blocks of code. Use `def` to define them.
@@ -319,6 +414,7 @@ result = add(5, 3)
     )
     await storage.create_course_module(
         db, course_id=c3.id, title="Data Wrangling with Pandas", sort_order=1,
+        quiz=QUIZ_DS_PANDAS,
         content="""## Introduction to Pandas
 
 Pandas is the go-to library for data manipulation in Python.
@@ -369,6 +465,7 @@ df["Age"].fillna(df["Age"].mean())  # Fill with mean
     )
     await storage.create_course_module(
         db, course_id=c3.id, title="Data Visualization", sort_order=2,
+        quiz=QUIZ_DS_VIZ,
         content="""## Visualizing Data
 
 Good visualizations tell stories. Python has powerful libraries for this.
@@ -419,6 +516,7 @@ sns.heatmap(df.corr(), annot=True, cmap="coolwarm")
     )
     await storage.create_course_module(
         db, course_id=c4.id, title="Cloud Concepts", sort_order=1,
+        quiz=QUIZ_CLOUD_CONCEPTS,
         content="""## What is Cloud Computing?
 
 Cloud computing delivers computing resources — servers, storage, databases, networking, software — over the internet ("the cloud") on a pay-as-you-go basis.
@@ -444,6 +542,7 @@ Cloud computing delivers computing resources — servers, storage, databases, ne
     )
     await storage.create_course_module(
         db, course_id=c4.id, title="AWS Core Services", sort_order=2,
+        quiz=QUIZ_CLOUD_AWS,
         content="""## Essential AWS Services
 
 ### Compute — EC2
@@ -479,6 +578,7 @@ def lambda_handler(event, context):
     )
     await storage.create_course_module(
         db, course_id=c4.id, title="Deploying on the Cloud", sort_order=3,
+        quiz=QUIZ_CLOUD_DEPLOY,
         content="""## Deploying Your First Application
 
 ### Step 1: Containerize with Docker
@@ -529,6 +629,7 @@ Automate deployments with:
     )
     await storage.create_course_module(
         db, course_id=c5.id, title="Threat Landscape", sort_order=1,
+        quiz=QUIZ_SEC_THREATS,
         content="""## Understanding Cyber Threats
 
 ### Common Attack Types
@@ -558,6 +659,7 @@ Human-targeted attacks are often more effective than technical ones:
     )
     await storage.create_course_module(
         db, course_id=c5.id, title="Network Security", sort_order=2,
+        quiz=QUIZ_SEC_NETWORK,
         content="""## Securing Your Network
 
 ### Firewalls
@@ -593,6 +695,7 @@ Key principles:
     )
     await storage.create_course_module(
         db, course_id=c5.id, title="Security Best Practices", sort_order=3,
+        quiz=QUIZ_SEC_PRACTICES,
         content="""## Security Best Practices for Developers
 
 ### Authentication & Authorization
@@ -635,34 +738,103 @@ cursor.execute("SELECT * FROM users WHERE email = %s", (user_input,))
     )
 
     # --- Enrollments with varied progress ---
-    # emp1 (John Employee) - enrolled in React (in progress 65%), Python (completed)
-    await storage.create_enrollment(db, user_id=emp1.id, course_id=c1.id, status="in_progress", progress_pct=65)
-    await storage.create_enrollment(db, user_id=emp1.id, course_id=c2.id, status="completed", progress_pct=100)
+    e1 = await storage.create_enrollment(db, user_id=emp1.id, course_id=c1.id, status="in_progress", progress_pct=65)
+    e2 = await storage.create_enrollment(db, user_id=emp1.id, course_id=c2.id, status="completed", progress_pct=100)
+    e3 = await storage.create_enrollment(db, user_id=emp2.id, course_id=c3.id, status="in_progress", progress_pct=40)
+    e4 = await storage.create_enrollment(db, user_id=emp2.id, course_id=c4.id, status="assigned", progress_pct=0)
+    e5 = await storage.create_enrollment(db, user_id=emp3.id, course_id=c5.id, status="in_progress", progress_pct=80)
+    e6 = await storage.create_enrollment(db, user_id=emp3.id, course_id=c1.id, status="in_progress", progress_pct=20)
 
-    # emp2 (Jane Doe) - enrolled in Data Science (in progress 40%), Cloud (assigned)
-    await storage.create_enrollment(db, user_id=emp2.id, course_id=c3.id, status="in_progress", progress_pct=40)
-    await storage.create_enrollment(db, user_id=emp2.id, course_id=c4.id, status="assigned", progress_pct=0)
+    # --- LearnerProfiles ---
+    lp1 = await storage.get_or_create_learner_profile(db, emp1.id)
+    await storage.update_learner_profile(
+        db, emp1.id,
+        knowledge_level="intermediate", avg_quiz_score=72.0,
+        total_modules_completed=3, preferred_pace="normal",
+        strong_topics=["React Hooks", "Python Functions"],
+        struggle_topics=["State management"],
+    )
+    lp2 = await storage.get_or_create_learner_profile(db, emp2.id)
+    await storage.update_learner_profile(
+        db, emp2.id,
+        knowledge_level="beginner", avg_quiz_score=45.0,
+        total_modules_completed=1, preferred_pace="slow",
+        strong_topics=["Data Types"],
+        struggle_topics=["Pandas filtering", "Visualization"],
+    )
+    lp3 = await storage.get_or_create_learner_profile(db, emp3.id)
+    await storage.update_learner_profile(
+        db, emp3.id,
+        knowledge_level="advanced", avg_quiz_score=88.0,
+        total_modules_completed=5, preferred_pace="fast",
+        strong_topics=["Network Security", "Threat Landscape", "JSX"],
+        struggle_topics=["Cloud deployment"],
+    )
 
-    # emp3 (Alex Kumar) - enrolled in Cybersecurity (in progress 80%), React (in progress 20%)
-    await storage.create_enrollment(db, user_id=emp3.id, course_id=c5.id, status="in_progress", progress_pct=80)
-    await storage.create_enrollment(db, user_id=emp3.id, course_id=c1.id, status="in_progress", progress_pct=20)
+    # --- SpeakingPractice records for emp1 ---
+    from models import SpeakingPractice
+    from datetime import datetime, timedelta
+    sp1 = SpeakingPractice(
+        user_id=emp1.id,
+        prompt="Describe your favorite hobby and why you enjoy it.",
+        transcript="I really enjoy coding because it lets me solve complex problems and build useful tools. I started programming about three years ago and found it incredibly rewarding.",
+        pronunciation_score=82.5, fluency_score=78.0,
+        feedback="Good job articulating your thoughts clearly. Your sentence structure was solid and your vocabulary was appropriate for professional communication.",
+        corrections="Try to avoid starting sentences with 'I really' too often. Consider using more varied sentence starters for a more polished delivery.",
+        created_at=datetime.utcnow() - timedelta(days=7),
+    )
+    sp2 = SpeakingPractice(
+        user_id=emp1.id,
+        prompt="Explain the importance of effective communication in a team.",
+        transcript="Effective communication in a team is crucial because it ensures everyone is aligned on goals. When team members share information openly, it reduces misunderstandings and increases productivity.",
+        pronunciation_score=88.0, fluency_score=85.5,
+        feedback="Excellent response with a clear structure. You effectively conveyed the key points about team communication. Your pace was comfortable and natural.",
+        corrections="Consider adding a specific example next time to make your point more concrete and memorable.",
+        created_at=datetime.utcnow() - timedelta(days=3),
+    )
+    db.add(sp1)
+    db.add(sp2)
+    await db.commit()
+
+    # --- TutorMessages for emp1 / course1 ---
+    from models import CourseModule
+    from sqlalchemy import select
+    mods_q = await db.execute(select(CourseModule).where(CourseModule.course_id == c1.id).limit(1))
+    first_mod = mods_q.scalar_one_or_none()
+    if first_mod:
+        await storage.create_tutor_message(db, user_id=emp1.id, course_id=c1.id, module_id=first_mod.id,
+            role="user", content="What's the difference between props and state in React?")
+        await storage.create_tutor_message(db, user_id=emp1.id, course_id=c1.id, module_id=first_mod.id,
+            role="assistant", content="Props are read-only inputs passed from a parent to a child component. State is internal, mutable data owned by the component itself. When state changes, the component re-renders; when the parent re-renders, the child gets updated props.")
+        await storage.create_tutor_message(db, user_id=emp1.id, course_id=c1.id, module_id=first_mod.id,
+            role="user", content="Can a component change its own props?")
+        await storage.create_tutor_message(db, user_id=emp1.id, course_id=c1.id, module_id=first_mod.id,
+            role="assistant", content="No! Props are immutable from the child's perspective. If you need the child to influence data, you'd pass a callback function as a prop from the parent, and the child calls it to notify the parent.")
 
     # --- Notifications ---
     await storage.create_notification(
-        db, user_id=emp1.id, title="Welcome",
-        message="Welcome to the LMS! Start with Fundamentals of React.", is_read=False,
+        db, user_id=emp1.id, title="Welcome to LMS! 🎉",
+        message="Welcome! You've been enrolled in Fundamentals of React. Start learning now.", is_read=False,
     )
     await storage.create_notification(
         db, user_id=emp1.id, title="Course Completed 🎉",
         message="Congratulations! You have completed Python for Beginners.", is_read=False,
     )
     await storage.create_notification(
-        db, user_id=emp2.id, title="New Course Assigned",
-        message="You have been assigned Cloud Computing Essentials.", is_read=False,
+        db, user_id=emp1.id, title="Speaking Practice Analyzed",
+        message="Your practice has been analyzed. Pronunciation: 88%, Fluency: 85%.", is_read=True,
     )
     await storage.create_notification(
-        db, user_id=emp3.id, title="Keep it up!",
-        message="You're 80% through Cybersecurity Fundamentals. Almost there!", is_read=False,
+        db, user_id=emp2.id, title="Course Assigned",
+        message="You've been assigned \"Cloud Computing Essentials\". Start learning now!", is_read=False,
+    )
+    await storage.create_notification(
+        db, user_id=emp2.id, title="Reminder: Low Progress",
+        message="You've been at 40% on Introduction to Data Science for a while. Need help? Talk to your AI Tutor!", is_read=False,
+    )
+    await storage.create_notification(
+        db, user_id=emp3.id, title="Almost There!",
+        message="You're 80% through Cybersecurity Fundamentals. Keep going — you're doing great!", is_read=False,
     )
 
-    print("Database seeded successfully with 5 fundamental courses.")
+    print("Database seeded successfully with 5 courses (quiz data), learner profiles, speaking practices, and notifications.")

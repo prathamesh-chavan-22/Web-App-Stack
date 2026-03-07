@@ -1,271 +1,278 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Plus, BrainCircuit, Search, CheckCircle2, FileQuestion, GraduationCap } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { CheckCircle2, FileQuestion, GraduationCap, Loader2, Trophy, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// Mock Data
-const MOCK_QUESTION_BANKS = [
-    { id: 1, title: "AWS Solutions Architecture Qs", questions: 45, topic: "Cloud", level: "Advanced" },
-    { id: 2, title: "Leadership Scenario Tests", questions: 20, topic: "Soft Skills", level: "Intermediate" },
-    { id: 3, title: "Cybersecurity Basics", questions: 35, topic: "Security", level: "Beginner" },
-];
+interface QuizQuestion {
+    q: string;
+    options: string[];
+    correct: number;
+}
 
-const MOCK_ACTIVE_EXAMS = [
-    { id: 1, title: "Security Compliance Q3", status: "Active", attempts: 142, avgScore: 88 },
-    { id: 2, title: "New Manager Assessment", status: "Draft", attempts: 0, avgScore: null },
-];
+interface AvailableAssessment {
+    moduleId: number;
+    moduleTitle: string;
+    courseId: number;
+    courseTitle: string;
+    questionCount: number;
+    questions: QuizQuestion[];
+}
 
-const MOCK_EMPLOYEE_EXAMS = [
-    { id: 1, title: "Annual Security Compliance Exam", dueDate: "2026-03-15", status: "Pending", questions: 20 },
-    { id: 2, title: "React Native Fundamentals", dueDate: "2026-04-01", status: "Completed", questions: 15, score: 92 },
-];
+interface AssessmentHistory {
+    id: number;
+    moduleId: number;
+    moduleTitle: string;
+    courseTitle: string;
+    score: number;
+    submittedAt: string;
+}
 
 export default function Assessments() {
     const { user } = useAuth();
-
     if (!user) return <Redirect to="/login" />;
 
     return (
         <div className="space-y-8">
             <div>
-                <h1 className="text-3xl font-display font-bold text-foreground">Assessments & Question Banks</h1>
+                <h1 className="text-3xl font-display font-bold text-foreground">Assessments</h1>
                 <p className="text-muted-foreground mt-2">
-                    {user.role === "employee" ? "Take assigned exams and view your assessment history." : "Manage question banks, generate exams, and track performance."}
+                    {user.role === "employee"
+                        ? "Take quizzes from your enrolled course modules and track your scores."
+                        : "View employee assessment activity and quiz performance."}
                 </p>
             </div>
-
-            {user.role === "l_and_d" ? <LndAssessmentView /> : <EmployeeAssessmentView />}
+            <EmployeeAssessmentView />
         </div>
     );
 }
 
-function LndAssessmentView() {
+function EmployeeAssessmentView() {
     const { toast } = useToast();
-    const [isGenerating, setIsGenerating] = useState(false);
+    const [activeAssessment, setActiveAssessment] = useState<AvailableAssessment | null>(null);
+    const [answers, setAnswers] = useState<number[]>([]);
+    const [currentQ, setCurrentQ] = useState(0);
+    const [result, setResult] = useState<any>(null);
 
-    const handleGenerateBank = () => {
-        setIsGenerating(true);
-        setTimeout(() => {
-            setIsGenerating(false);
-            toast({ title: "Question Bank Generated", description: "AI has produced 15 new situational questions." });
-        }, 2000);
+    const { data: available = [], isLoading: loadingAvail } = useQuery<AvailableAssessment[]>({
+        queryKey: ["/api/assessments/available"],
+    });
+
+    const { data: history = [], isLoading: loadingHistory } = useQuery<AssessmentHistory[]>({
+        queryKey: ["/api/assessments/history"],
+    });
+
+    const submitMutation = useMutation({
+        mutationFn: async (data: { moduleId: number; answers: number[] }) => {
+            const res = await apiRequest("POST", "/api/assessments/submit", data);
+            return res.json();
+        },
+        onSuccess: (data) => {
+            setResult(data);
+            queryClient.invalidateQueries({ queryKey: ["/api/assessments/available"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/assessments/history"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        },
+        onError: () => {
+            toast({ variant: "destructive", title: "Failed to submit assessment." });
+        },
+    });
+
+    const startAssessment = (assessment: AvailableAssessment) => {
+        setActiveAssessment(assessment);
+        setAnswers(new Array(assessment.questions.length).fill(-1));
+        setCurrentQ(0);
+        setResult(null);
     };
 
-    return (
-        <Tabs defaultValue="banks" className="space-y-6">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-                <TabsTrigger value="banks">Question Banks</TabsTrigger>
-                <TabsTrigger value="exams">Active Exams</TabsTrigger>
-            </TabsList>
+    const selectAnswer = (optionIdx: number) => {
+        const updated = [...answers];
+        updated[currentQ] = optionIdx;
+        setAnswers(updated);
+    };
 
-            <TabsContent value="banks" className="space-y-6">
-                <div className="grid lg:grid-cols-3 gap-6">
-                    <Card className="lg:col-span-1 h-fit shadow-md border-border/50">
-                        <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
-                            <CardTitle className="flex items-center gap-2">
-                                <BrainCircuit className="w-5 h-5 text-primary" />
-                                AI Bank Generator
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4 pt-6">
-                            <div className="space-y-2">
-                                <Label>Topic Source</Label>
-                                <Input placeholder="e.g. Sales Objection Handling" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Bloom's Taxonomy Level</Label>
-                                <Select defaultValue="application">
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="knowledge">Knowledge (Recall)</SelectItem>
-                                        <SelectItem value="comprehension">Comprehension (Understand)</SelectItem>
-                                        <SelectItem value="application">Application (Use)</SelectItem>
-                                        <SelectItem value="analysis">Analysis (Examine)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Number of Questions</Label>
-                                <Input type="number" defaultValue={15} />
-                            </div>
-                            <Button onClick={handleGenerateBank} disabled={isGenerating} className="w-full shadow-lg shadow-primary/20 mt-2">
-                                {isGenerating ? <div className="w-4 h-4 rounded-full border-2 border-background border-t-transparent animate-spin mr-2" /> : <BrainCircuit className="w-4 h-4 mr-2" />}
-                                Generate Questions
-                            </Button>
-                        </CardContent>
-                    </Card>
+    const handleSubmit = () => {
+        if (!activeAssessment) return;
+        submitMutation.mutate({ moduleId: activeAssessment.moduleId, answers });
+    };
 
-                    <div className="lg:col-span-2 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <div className="relative w-72">
-                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                <Input placeholder="Search banks..." className="pl-9 h-10 bg-muted/30" />
-                            </div>
-                            <Button variant="outline"><Plus className="w-4 h-4 mr-2" /> New Bank</Button>
-                        </div>
+    const resetQuiz = () => {
+        setActiveAssessment(null);
+        setAnswers([]);
+        setCurrentQ(0);
+        setResult(null);
+    };
 
-                        <div className="grid sm:grid-cols-2 gap-4">
-                            {MOCK_QUESTION_BANKS.map(bank => (
-                                <Card key={bank.id} className="hover:border-primary/50 transition-colors cursor-pointer group shadow-sm">
-                                    <CardContent className="p-5 flex flex-col h-full gap-4">
-                                        <div className="flex justify-between items-start">
-                                            <Badge variant="secondary" className="bg-muted/50">{bank.topic}</Badge>
-                                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{bank.level}</span>
-                                        </div>
-                                        <h3 className="font-display font-bold text-lg group-hover:text-primary transition-colors leading-tight flex-1">
-                                            {bank.title}
-                                        </h3>
-                                        <div className="flex justify-between items-center pt-2 border-t border-border/50">
-                                            <div className="flex items-center text-sm text-muted-foreground">
-                                                <FileQuestion className="w-4 h-4 mr-1.5" />
-                                                {bank.questions} Questions
-                                            </div>
-                                            <Button variant="ghost" size="sm" className="h-8">Edit <ArrowRight className="w-3 h-3 ml-1" /></Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
+    // Result screen
+    if (result) {
+        const pct = result.score;
+        const passed = pct >= 70;
+        return (
+            <Card className="max-w-2xl mx-auto shadow-xl border-primary/20">
+                <CardContent className="p-10 text-center space-y-6">
+                    <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center ${passed ? "bg-green-500/10" : "bg-destructive/10"}`}>
+                        {passed
+                            ? <Trophy className="w-10 h-10 text-green-500" />
+                            : <RotateCcw className="w-10 h-10 text-destructive" />}
                     </div>
-                </div>
-            </TabsContent>
+                    <div>
+                        <h2 className="text-3xl font-display font-bold">{pct}%</h2>
+                        <p className="text-muted-foreground mt-1">{result.correct} out of {result.total} correct</p>
+                        <p className="font-semibold mt-1">{result.moduleTitle}</p>
+                    </div>
+                    <Badge className={passed ? "bg-green-500" : "bg-destructive"} >
+                        {passed ? "Passed ✓" : "Needs Improvement"}
+                    </Badge>
+                    <p className="text-sm text-muted-foreground">
+                        {passed
+                            ? "Great work! Your score has been recorded and your learner profile updated."
+                            : "Don't worry — review the module content and try other assessments to improve your score."}
+                    </p>
+                    <Button onClick={resetQuiz}>Back to Assessments</Button>
+                </CardContent>
+            </Card>
+        );
+    }
 
-            <TabsContent value="exams">
-                <Card className="border-border/50 shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between bg-muted/30 border-b border-border/50">
-                        <div>
-                            <CardTitle>Manage Exams</CardTitle>
-                            <CardDescription>Combine question banks to create formal assessments.</CardDescription>
-                        </div>
-                        <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Create Exam</Button>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="divide-y divide-border/50">
-                            {MOCK_ACTIVE_EXAMS.map(exam => (
-                                <div key={exam.id} className="p-4 flex items-center justify-between hover:bg-muted/20">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-2 h-2 rounded-full ${exam.status === 'Active' ? 'bg-green-500' : 'bg-muted-foreground'}`} />
-                                        <div>
-                                            <h4 className="font-semibold">{exam.title}</h4>
-                                            <p className="text-sm text-muted-foreground">{exam.attempts} total attempts • Avg Score: {exam.avgScore ? `${exam.avgScore}%` : 'N/A'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm">View Analytics</Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-        </Tabs>
-    );
-}
+    // Active quiz
+    if (activeAssessment) {
+        const q = activeAssessment.questions[currentQ];
+        const isLast = currentQ === activeAssessment.questions.length - 1;
+        const selectedAnswer = answers[currentQ];
 
-function EmployeeAssessmentView() {
-    const [takingExam, setTakingExam] = useState<number | null>(null);
-
-    if (takingExam) {
         return (
             <Card className="max-w-3xl mx-auto shadow-xl border-primary/20">
                 <CardHeader className="bg-primary/5 border-b border-primary/10">
                     <div className="flex justify-between items-center">
                         <CardTitle className="font-display flex items-center gap-2">
                             <GraduationCap className="w-6 h-6 text-primary" />
-                            Annual Security Compliance Exam
+                            {activeAssessment.moduleTitle}
                         </CardTitle>
-                        <Badge variant="outline" className="font-mono text-sm">29:45</Badge>
+                        <Badge variant="outline" className="font-mono text-sm">
+                            {currentQ + 1} / {activeAssessment.questions.length}
+                        </Badge>
                     </div>
+                    <Progress value={((currentQ + 1) / activeAssessment.questions.length) * 100} className="mt-3 h-1.5" />
                 </CardHeader>
                 <CardContent className="p-8 space-y-8">
-                    <div className="space-y-4">
-                        <div className="flex justify-between text-sm font-medium text-muted-foreground">
-                            <span>Question 1 of 20</span>
-                        </div>
-                        <h3 className="text-xl font-medium leading-relaxed">
-                            You receive an email from the "IT Department" asking you to click a link and verify your password due to a system upgrade. There are several spelling errors in the email body. What should you do?
-                        </h3>
-                    </div>
-
+                    <h3 className="text-xl font-medium leading-relaxed">{q.q}</h3>
                     <div className="space-y-3">
-                        {[
-                            "Click the link and carefully enter your credentials.",
-                            "Reply to the email to ask if it's legitimate.",
-                            "Ignore it but do not report it.",
-                            "Report the email as phising using the Phish Alert button and delete it."
-                        ].map((opt, i) => (
-                            <div key={i} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors active:bg-muted">
-                                <div className="w-5 h-5 rounded-full border border-primary flex items-center justify-center">
-                                    {i === 3 && <div className="w-3 h-3 rounded-full bg-primary" />}
+                        {q.options.map((opt, i) => (
+                            <div
+                                key={i}
+                                onClick={() => selectAnswer(i)}
+                                className={`flex items-center space-x-3 p-4 border rounded-lg cursor-pointer transition-colors
+                                    ${selectedAnswer === i
+                                        ? "border-primary bg-primary/10"
+                                        : "hover:bg-muted/50"}`}
+                            >
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center
+                                    ${selectedAnswer === i ? "border-primary" : "border-muted-foreground"}`}>
+                                    {selectedAnswer === i && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                                 </div>
-                                <Label className="cursor-pointer text-base font-normal flex-1">{opt}</Label>
+                                <span className="text-base font-normal flex-1">{opt}</span>
                             </div>
                         ))}
                     </div>
-
-                    <div className="flex justify-between pt-6 border-t border-border/50">
-                        <Button variant="outline" disabled>Previous</Button>
-                        <Button onClick={() => setTakingExam(null)}>Next Question <ArrowRight className="w-4 h-4 ml-2" /></Button>
+                    <div className="flex justify-between pt-4 border-t border-border/50">
+                        <Button variant="outline" onClick={() => setCurrentQ(q => q - 1)} disabled={currentQ === 0}>
+                            Previous
+                        </Button>
+                        {isLast ? (
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={submitMutation.isPending || answers.some(a => a === -1)}
+                                className="shadow-lg shadow-primary/20"
+                            >
+                                {submitMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                                Submit Assessment
+                            </Button>
+                        ) : (
+                            <Button onClick={() => setCurrentQ(q => q + 1)} disabled={selectedAnswer === -1}>
+                                Next Question →
+                            </Button>
+                        )}
                     </div>
                 </CardContent>
             </Card>
         );
     }
 
+    // Overview
     return (
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-8">
             <div className="space-y-4">
-                <h3 className="font-display font-semibold text-xl">Pending Assessments</h3>
-                {MOCK_EMPLOYEE_EXAMS.filter(e => e.status === 'Pending').map(exam => (
-                    <Card key={exam.id} className="border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow">
-                        <CardContent className="p-5">
-                            <div className="flex justify-between items-start mb-4">
-                                <Badge variant="secondary" className="bg-primary/10 text-primary">{exam.questions} Questions</Badge>
-                                <span className="text-sm font-medium text-destructive">Due: {new Date(exam.dueDate).toLocaleDateString()}</span>
-                            </div>
-                            <h4 className="text-lg font-bold font-display mb-4">{exam.title}</h4>
-                            <Button onClick={() => setTakingExam(exam.id)} className="w-full shadow-sm">Start Assessment</Button>
+                <h3 className="font-display font-semibold text-xl">Available Quizzes</h3>
+                {loadingAvail ? (
+                    <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                ) : available.length === 0 ? (
+                    <Card className="border-dashed">
+                        <CardContent className="p-8 text-center text-muted-foreground">
+                            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                            You've completed all available quizzes!
                         </CardContent>
                     </Card>
-                ))}
+                ) : (
+                    available.map(assessment => (
+                        <Card key={assessment.moduleId} className="border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow">
+                            <CardContent className="p-5">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">{assessment.courseTitle}</p>
+                                        <h4 className="text-lg font-bold font-display">{assessment.moduleTitle}</h4>
+                                    </div>
+                                    <Badge variant="secondary" className="bg-primary/10 text-primary">
+                                        <FileQuestion className="w-3 h-3 mr-1" />
+                                        {assessment.questionCount} Qs
+                                    </Badge>
+                                </div>
+                                <Button onClick={() => startAssessment(assessment)} className="w-full shadow-sm">
+                                    Start Quiz
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ))
+                )}
             </div>
 
             <div className="space-y-4">
                 <h3 className="font-display font-semibold text-xl">Completed</h3>
-                {MOCK_EMPLOYEE_EXAMS.filter(e => e.status === 'Completed').map(exam => (
-                    <Card key={exam.id} className="opacity-80 shadow-sm border-border/50">
-                        <CardContent className="p-5">
-                            <div className="flex justify-between items-start mb-4">
-                                <Badge variant="outline" className="text-muted-foreground">{new Date(exam.dueDate).toLocaleDateString()}</Badge>
-                                <div className="flex items-center text-green-600 font-bold bg-green-500/10 px-2 py-0.5 rounded text-sm">
-                                    <CheckCircle2 className="w-4 h-4 mr-1" /> {exam.score}%
-                                </div>
-                            </div>
-                            <h4 className="text-lg font-bold font-display mb-4 text-foreground/80">{exam.title}</h4>
-                            <Button variant="secondary" className="w-full" size="sm">Review Answers</Button>
+                {loadingHistory ? (
+                    <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                ) : history.length === 0 ? (
+                    <Card className="border-dashed opacity-60">
+                        <CardContent className="p-8 text-center text-muted-foreground">
+                            No assessments completed yet. Take your first quiz!
                         </CardContent>
                     </Card>
-                ))}
+                ) : (
+                    history.map(item => (
+                        <Card key={item.id} className="opacity-80 shadow-sm border-border/50">
+                            <CardContent className="p-5">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">{item.courseTitle}</p>
+                                        <h4 className="text-base font-bold font-display text-foreground/80">{item.moduleTitle}</h4>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {new Date(item.submittedAt).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                    <div className={`flex items-center font-bold px-2 py-0.5 rounded text-sm
+                                        ${item.score >= 70 ? "text-green-600 bg-green-500/10" : "text-destructive bg-destructive/10"}`}>
+                                        <CheckCircle2 className="w-4 h-4 mr-1" /> {item.score}%
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))
+                )}
             </div>
         </div>
-    );
-}
-
-function ArrowRight({ className }: { className?: string }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-            <path d="M5 12h14"></path>
-            <path d="m12 5 7 7-7 7"></path>
-        </svg>
     );
 }

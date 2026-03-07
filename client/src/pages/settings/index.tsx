@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,18 +15,51 @@ import { useToast } from "@/hooks/use-toast";
 export default function Settings() {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSaving, setIsSaving] = useState(false);
+    const queryClient = useQueryClient();
+    const fullNameRef = useRef<HTMLInputElement>(null);
+    const currentPassRef = useRef<HTMLInputElement>(null);
+    const newPassRef = useRef<HTMLInputElement>(null);
+    const confirmPassRef = useRef<HTMLInputElement>(null);
 
     if (!user) return null;
 
-    const handleSave = (e: React.FormEvent) => {
+    const profileMutation = useMutation({
+        mutationFn: async (data: Record<string, string>) => {
+            const res = await apiRequest("PATCH", "/api/auth/profile", data);
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+            toast({ title: "Settings Saved", description: "Your profile has been updated successfully." });
+        },
+        onError: (err: any) => {
+            toast({ variant: "destructive", title: "Save failed", description: err.message ?? "Please try again." });
+        },
+    });
+
+    const handleProfileSave = (e: React.FormEvent) => {
         e.preventDefault();
-        setIsSaving(true);
-        setTimeout(() => {
-            setIsSaving(false);
-            toast({ title: "Settings Saved", description: "Your preferences have been updated successfully." });
-        }, 1000);
+        const newName = fullNameRef.current?.value?.trim();
+        if (newName) profileMutation.mutate({ fullName: newName });
     };
+
+    const handlePasswordSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        const cur = currentPassRef.current?.value ?? "";
+        const next = newPassRef.current?.value ?? "";
+        const confirm = confirmPassRef.current?.value ?? "";
+        if (!cur || !next) {
+            toast({ variant: "destructive", title: "Please fill in all password fields." });
+            return;
+        }
+        if (next !== confirm) {
+            toast({ variant: "destructive", title: "New passwords do not match." });
+            return;
+        }
+        profileMutation.mutate({ currentPassword: cur, newPassword: next });
+    };
+
+    const isSaving = profileMutation.isPending;
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
@@ -45,24 +80,20 @@ export default function Settings() {
                     <Card className="border-border/50 shadow-md">
                         <CardHeader>
                             <CardTitle>Profile Details</CardTitle>
-                            <CardDescription>Update your personal information and avatar.</CardDescription>
+                            <CardDescription>Update your personal information.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <form onSubmit={handleSave} className="space-y-6">
+                            <form onSubmit={handleProfileSave} className="space-y-6">
                                 <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center p-4 bg-muted/20 rounded-xl border border-border/50">
                                     <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary">
                                         {user.fullName.charAt(0)}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Button variant="outline" type="button" size="sm">Change Avatar</Button>
-                                        <p className="text-xs text-muted-foreground">JPG, GIF or PNG. 1MB max.</p>
                                     </div>
                                 </div>
 
                                 <div className="grid sm:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="fullName">Full Name</Label>
-                                        <Input id="fullName" defaultValue={user.fullName} />
+                                        <Input id="fullName" ref={fullNameRef} defaultValue={user.fullName} />
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="email">Email Address</Label>
@@ -72,10 +103,6 @@ export default function Settings() {
                                     <div className="space-y-2">
                                         <Label htmlFor="role">Role</Label>
                                         <Input id="role" defaultValue={user.role.replace('_', ' ').toUpperCase()} disabled className="bg-muted/50 font-medium" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="department">Department</Label>
-                                        <Input id="department" defaultValue="Engineering" />
                                     </div>
                                 </div>
 
@@ -99,27 +126,19 @@ export default function Settings() {
                         <CardContent className="space-y-6">
                             <div className="space-y-4">
                                 <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Email Notifications</h4>
-                                <div className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/10 transition-colors">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-base font-medium">Course Assignments</Label>
-                                        <p className="text-sm text-muted-foreground">When you are assigned a new course or path.</p>
+                                {[
+                                    { label: "Course Assignments", desc: "When you are assigned a new course or path.", defaultOn: true },
+                                    { label: "Due Date Reminders", desc: "Reminders 3 days and 1 day before an assignment is due.", defaultOn: true },
+                                    { label: "Weekly Digest", desc: "A summary of your learning progress each week.", defaultOn: false },
+                                ].map(item => (
+                                    <div key={item.label} className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/10 transition-colors">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-base font-medium">{item.label}</Label>
+                                            <p className="text-sm text-muted-foreground">{item.desc}</p>
+                                        </div>
+                                        <Switch defaultChecked={item.defaultOn} />
                                     </div>
-                                    <Switch defaultChecked />
-                                </div>
-                                <div className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/10 transition-colors">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-base font-medium">Due Date Reminders</Label>
-                                        <p className="text-sm text-muted-foreground">Reminders 3 days and 1 day before an assignment is due.</p>
-                                    </div>
-                                    <Switch defaultChecked />
-                                </div>
-                                <div className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/10 transition-colors">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-base font-medium">Weekly Digest</Label>
-                                        <p className="text-sm text-muted-foreground">A summary of your learning progress each week.</p>
-                                    </div>
-                                    <Switch />
-                                </div>
+                                ))}
                             </div>
                         </CardContent>
                     </Card>
@@ -132,20 +151,23 @@ export default function Settings() {
                             <CardDescription>Manage your password and active sessions.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <form onSubmit={handleSave} className="space-y-4 max-w-md">
+                            <form onSubmit={handlePasswordSave} className="space-y-4 max-w-md">
                                 <div className="space-y-2">
                                     <Label htmlFor="currentPass">Current Password</Label>
-                                    <Input id="currentPass" type="password" />
+                                    <Input id="currentPass" type="password" ref={currentPassRef} />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="newPass">New Password</Label>
-                                    <Input id="newPass" type="password" />
+                                    <Input id="newPass" type="password" ref={newPassRef} />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="confirmPass">Confirm New Password</Label>
-                                    <Input id="confirmPass" type="password" />
+                                    <Input id="confirmPass" type="password" ref={confirmPassRef} />
                                 </div>
-                                <Button type="submit" variant="secondary" disabled={isSaving}>Update Password</Button>
+                                <Button type="submit" variant="secondary" disabled={isSaving}>
+                                    {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                    Update Password
+                                </Button>
                             </form>
                         </CardContent>
                     </Card>
@@ -180,10 +202,11 @@ export default function Settings() {
                                         <SelectItem value="est">Eastern Time (ET)</SelectItem>
                                         <SelectItem value="gmt">Greenwich Mean Time (GMT)</SelectItem>
                                         <SelectItem value="cet">Central European Time (CET)</SelectItem>
+                                        <SelectItem value="ist">India Standard Time (IST)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button onClick={handleSave} disabled={isSaving}>Save Preferences</Button>
+                            <Button>Save Preferences</Button>
                         </CardContent>
                     </Card>
                 </TabsContent>

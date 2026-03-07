@@ -177,18 +177,24 @@ async def generate_course(
 
 @router.get("/image-proxy")
 async def image_proxy(url: str):
-    """Download an external image, cache locally, and redirect to the local copy."""
+    """Proxy external images — redirect directly to source URL."""
     from fastapi.responses import RedirectResponse
-
     if not url.startswith("http"):
         return Response(content='{"message":"Invalid URL"}', status_code=400, media_type="application/json")
-
-    local_path = await proxy_and_cache_image(url)
-    if local_path:
-        return RedirectResponse(url=f"/api{local_path}", status_code=302)
-
-    # If download failed, try to redirect directly (fallback)
     return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/search")
+async def search_courses(q: str = "", db: AsyncSession = Depends(get_db)):
+    """Search courses by title/description and users by name."""
+    if len(q.strip()) < 2:
+        return {"courses": [], "users": []}
+    courses, users = await storage.search(db, q.strip())
+    from schemas import CourseOut, UserOut
+    return {
+        "courses": [CourseOut.model_validate(c).model_dump(by_alias=True) for c in courses],
+        "users": [UserOut.model_validate(u).model_dump(by_alias=True) for u in users],
+    }
 
 
 @router.get("/{course_id}")

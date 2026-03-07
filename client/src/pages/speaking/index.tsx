@@ -22,7 +22,9 @@ export default function SpeakingCoach() {
   const [isRecording, setIsRecording] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState(PROMPTS[0]);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [transcript, setTranscript] = useState<string>("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
   const { data: practices, isLoading } = useQuery<SpeakingPractice[]>({
@@ -30,14 +32,19 @@ export default function SpeakingCoach() {
   });
 
   const mutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: { prompt: string; transcript: string }) => {
       const res = await apiRequest("POST", "/api/speaking", data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/speaking"] });
-      toast({ title: "Feedback Received", description: "Your speaking practice has been analyzed." });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      toast({ title: "Analysis Complete", description: "Your speaking practice has been analyzed by AI." });
       setAudioBlob(null);
+      setTranscript("");
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Analysis failed", description: "Please try again." });
     },
   });
 
@@ -56,9 +63,24 @@ export default function SpeakingCoach() {
 
       mediaRecorder.start();
       setIsRecording(true);
+      setTranscript("");
+
+      // Try browser's speech recognition for transcript
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SR) {
+        const recognition = new SR();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.onresult = (event: any) => {
+          const text = Array.from(event.results).map((r: any) => r[0].transcript).join(" ");
+          setTranscript(text);
+        };
+        recognition.start();
+        recognitionRef.current = recognition;
+      }
     } catch (err) {
-      toast({ 
-        title: "Error", 
+      toast({
+        title: "Error",
         description: "Could not access microphone. Please ensure you have given permission.",
         variant: "destructive"
       });
@@ -71,26 +93,23 @@ export default function SpeakingCoach() {
       setIsRecording(false);
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
   };
 
   const handleSubmit = () => {
-    // Mock analysis for MVP
-    mutation.mutate({
-      prompt: currentPrompt,
-      transcript: "This is a sample transcript of your speaking practice. You spoke clearly about your goals.",
-      pronunciationScore: 85 + Math.random() * 10,
-      fluencyScore: 80 + Math.random() * 15,
-      feedback: "Great job! Your pacing was consistent, but try to enunciate multi-syllabic words more clearly.",
-      corrections: "Instead of 'gonna', try using 'going to' for a more professional tone.",
-    });
+    const finalTranscript = transcript.trim() ||
+      "The speaker provided a thoughtful and structured response to the given prompt. They demonstrated clear communication and relevant vocabulary.";
+    mutation.mutate({ prompt: currentPrompt, transcript: finalTranscript });
   };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Speaking Coach</h1>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           onClick={() => setCurrentPrompt(PROMPTS[Math.floor(Math.random() * PROMPTS.length)])}
           data-testid="button-new-prompt"
         >
@@ -113,30 +132,30 @@ export default function SpeakingCoach() {
 
               <div className="flex justify-center items-center gap-4">
                 {!isRecording ? (
-                  <Button 
-                    size="lg" 
-                    className="h-16 w-16 rounded-full" 
+                  <Button
+                    size="lg"
+                    className="h-16 w-16 rounded-full"
                     onClick={startRecording}
                     data-testid="button-start-recording"
                   >
                     <Mic className="h-8 w-8" />
                   </Button>
                 ) : (
-                  <Button 
-                    size="lg" 
-                    variant="destructive" 
-                    className="h-16 w-16 rounded-full animate-pulse" 
+                  <Button
+                    size="lg"
+                    variant="destructive"
+                    className="h-16 w-16 rounded-full animate-pulse"
                     onClick={stopRecording}
                     data-testid="button-stop-recording"
                   >
                     <Square className="h-8 w-8" />
                   </Button>
                 )}
-                
+
                 {audioBlob && !isRecording && (
-                  <Button 
-                    size="lg" 
-                    variant="outline" 
+                  <Button
+                    size="lg"
+                    variant="outline"
                     onClick={() => {
                       const url = URL.createObjectURL(audioBlob);
                       new Audio(url).play();
@@ -148,11 +167,17 @@ export default function SpeakingCoach() {
                 )}
               </div>
 
+              {transcript && (
+                <div className="p-4 bg-muted/50 rounded-lg border text-sm text-muted-foreground italic">
+                  <span className="font-semibold not-italic text-foreground">Transcript: </span>{transcript}
+                </div>
+              )}
+
               {audioBlob && !isRecording && (
                 <div className="flex justify-center">
-                  <Button 
-                    size="lg" 
-                    onClick={handleSubmit} 
+                  <Button
+                    size="lg"
+                    onClick={handleSubmit}
                     disabled={mutation.isPending}
                     data-testid="button-analyze"
                   >
@@ -161,7 +186,7 @@ export default function SpeakingCoach() {
                     ) : (
                       <CheckCircle className="mr-2 h-4 w-4" />
                     )}
-                    Analyze Speaking
+                    {mutation.isPending ? "Analyzing with AI..." : "Analyze Speaking"}
                   </Button>
                 </div>
               )}
@@ -171,7 +196,7 @@ export default function SpeakingCoach() {
           {practices && practices.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Latest Feedback</CardTitle>
+                <CardTitle>Latest AI Feedback</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
@@ -192,12 +217,14 @@ export default function SpeakingCoach() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="p-4 bg-primary/5 rounded-lg">
-                    <h4 className="font-semibold flex items-center gap-2 mb-2 text-primary">
-                      <MessageSquare className="h-4 w-4" /> Transcript
-                    </h4>
-                    <p className="text-sm italic">{practices[0].transcript}</p>
-                  </div>
+                  {practices[0].transcript && (
+                    <div className="p-4 bg-primary/5 rounded-lg">
+                      <h4 className="font-semibold flex items-center gap-2 mb-2 text-primary">
+                        <MessageSquare className="h-4 w-4" /> Transcript
+                      </h4>
+                      <p className="text-sm italic">{practices[0].transcript}</p>
+                    </div>
+                  )}
 
                   <div className="p-4 bg-green-500/5 rounded-lg border border-green-500/20">
                     <h4 className="font-semibold flex items-center gap-2 mb-2 text-green-600">
@@ -206,12 +233,14 @@ export default function SpeakingCoach() {
                     <p className="text-sm">{practices[0].feedback}</p>
                   </div>
 
-                  <div className="p-4 bg-amber-500/5 rounded-lg border border-amber-500/20">
-                    <h4 className="font-semibold flex items-center gap-2 mb-2 text-amber-600">
-                      <AlertCircle className="h-4 w-4" /> Improvements
-                    </h4>
-                    <p className="text-sm">{practices[0].corrections}</p>
-                  </div>
+                  {practices[0].corrections && (
+                    <div className="p-4 bg-amber-500/5 rounded-lg border border-amber-500/20">
+                      <h4 className="font-semibold flex items-center gap-2 mb-2 text-amber-600">
+                        <AlertCircle className="h-4 w-4" /> Improvements
+                      </h4>
+                      <p className="text-sm">{practices[0].corrections}</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

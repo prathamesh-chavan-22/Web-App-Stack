@@ -53,6 +53,15 @@ async def create_enrollment(body: CreateEnrollment, db: AsyncSession = Depends(g
         db, user_id=body.user_id, course_id=body.course_id,
         status=body.status, progress_pct=body.progress_pct,
     )
+    # Fire notification for the assigned user
+    course_data = await storage.get_course(db, body.course_id)
+    if course_data:
+        course_title = course_data["course"].title
+        await storage.create_notification(
+            db, user_id=body.user_id,
+            title="Course Assigned",
+            message=f"You've been assigned \"{course_title}\". Start learning now!",
+        )
     return EnrollmentOut.model_validate(enrollment).model_dump(by_alias=True)
 
 
@@ -67,4 +76,14 @@ async def update_progress(enrollment_id: int, body: UpdateProgress, db: AsyncSes
             status_code=404,
             media_type="application/json",
         )
+    # Notify on completion
+    if body.progress_pct == 100 or body.status == "completed":
+        course_data = await storage.get_course(db, enrollment.course_id)
+        if course_data:
+            course_title = course_data["course"].title
+            await storage.create_notification(
+                db, user_id=enrollment.user_id,
+                title="Course Completed 🎉",
+                message=f"Congratulations! You have completed \"{course_title}\".",
+            )
     return EnrollmentOut.model_validate(enrollment).model_dump(by_alias=True)

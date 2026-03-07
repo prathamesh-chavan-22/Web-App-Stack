@@ -196,3 +196,33 @@ async def generate_chapter_content(
 
     raw = await _call_mistral(messages, temperature=0.5, timeout=120.0)
     return json.loads(raw)
+
+
+async def analyze_speaking_transcript(prompt: str, transcript: str) -> dict:
+    """Analyze a speaking transcript and return scores + feedback."""
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an English speaking coach. Analyze the given transcript in response to the prompt. "
+                "Return a JSON object with:\n"
+                "- \"pronunciation_score\": float 0-100 (estimate based on word choice and structure)\n"
+                "- \"fluency_score\": float 0-100 (based on sentence flow, vocabulary, coherence)\n"
+                "- \"feedback\": string with 2-3 sentences of constructive feedback\n"
+                "- \"corrections\": string with 1-2 specific corrections or suggestions for improvement"
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Prompt: {prompt}\n\nTranscript: {transcript}",
+        },
+    ]
+    raw = await _call_mistral(messages, temperature=0.3, timeout=60.0)
+    result = json.loads(raw)
+    return {
+        "pronunciation_score": float(result.get("pronunciation_score", 75.0)),
+        "fluency_score": float(result.get("fluency_score", 75.0)),
+        "feedback": str(result.get("feedback", "Good effort! Keep practicing.")),
+        "corrections": str(result.get("corrections", "")),
+    }
+

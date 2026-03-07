@@ -148,3 +148,15 @@ class TutorMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     audio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+
+
+class Assessment(Base):
+    __tablename__ = "assessments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    course_id: Mapped[int] = mapped_column(Integer, ForeignKey("courses.id"), nullable=False)
+    module_id: Mapped[int] = mapped_column(Integer, ForeignKey("course_modules.id"), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    answers: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())

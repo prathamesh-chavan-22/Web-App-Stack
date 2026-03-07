@@ -365,3 +365,180 @@ async def create_tutor_message(db: AsyncSession, *, user_id: int, course_id: int
     await db.commit()
     await db.refresh(msg)
     return msg
+
+
+# --- Assessment ---
+
+
+async def get_available_assessments(db: AsyncSession, user_id: int) -> list[dict]:
+    """Return modules with quiz data in courses the user is enrolled in, excluding already-submitted."""
+    from sqlalchemy import text
+    stmt = text("""
+        SELECT cm.id as module_id, cm.title as module_title, cm.quiz,
+               c.id as course_id, c.title as course_title,
+               e.id as enrollment_id
+        FROM course_modules cm
+        JOIN courses c ON c.id = cm.course_id
+        JOIN enrollments e ON e.course_id = c.id AND e.user_id = :user_id
+        WHERE cm.quiz IS NOT NULL AND cm.quiz != ''
+          AND cm.id NOT IN (
+            SELECT module_id FROM assessments WHERE user_id = :user_id
+          )
+        ORDER BY c.title, cm.sort_order
+    """)
+    result = await db.execute(stmt, {"user_id": user_id})
+    rows = result.mappings().all()
+    return [dict(r) for r in rows]
+
+
+async def get_assessment_history(db: AsyncSession, user_id: int) -> list["Assessment"]:
+    from models import Assessment
+    result = await db.execute(
+        select(Assessment)
+        .where(Assessment.user_id == user_id)
+        .order_by(desc(Assessment.submitted_at))
+    )
+    return list(result.scalars().all())
+
+
+async def create_assessment(db: AsyncSession, *, user_id: int, course_id: int,
+                            module_id: int, score: float, answers: list) -> "Assessment":
+    from models import Assessment
+    assessment = Assessment(
+        user_id=user_id, course_id=course_id, module_id=module_id,
+        score=score, answers=answers,
+    )
+    db.add(assessment)
+    await db.commit()
+    await db.refresh(assessment)
+    # Update learner profile avg quiz score
+    history = await get_assessment_history(db, user_id)
+    avg = sum(a.score for a in history) / len(history) if history else score
+    await update_learner_profile(db, user_id, avg_quiz_score=round(avg, 1))
+    return assessment
+
+
+# --- Analytics ---
+
+
+async def get_analytics_dashboard(db: AsyncSession) -> dict:
+    from sqlalchemy import func as sqlfunc, cast, Date
+    from models import Enrollment, LearnerProfile, User
+
+    # Completion rate
+    total_q = await db.execute(select(sqlfunc.count()).select_from(Enrollment))
+    total = total_q.scalar() or 1
+    completed_q = await db.execute(
+        select(sqlfunc.count()).select_from(Enrollment).where(Enrollment.status == "completed")
+    )
+    completed = completed_q.scalar() or 0
+    completion_rate = round(completed / total * 100, 1)
+
+    # Avg quiz score from learner profiles
+    avg_q = await db.execute(select(sqlfunc.avg(LearnerProfile.avg_quiz_score)))
+    avg_quiz = round(float(avg_q.scalar() or 0), 1)
+
+    # At-risk: low progress OR low quiz score
+    at_risk_q = await db.execute(
+        select(Enrollment, User, LearnerProfile)
+        .join(User, User.id == Enrollment.user_id)
+        .outerjoin(LearnerProfile, LearnerProfile.user_id == Enrollment.user_id)
+        .where(
+            (Enrollment.progress_pct < 30) | (LearnerProfile.avg_quiz_score < 50)
+        )
+    )
+    at_risk_rows = at_risk_q.all()
+    seen_users = set()
+    at_risk = []
+    for row in at_risk_rows:
+        e, u, lp = row
+        if u.id in seen_users:
+            continue
+        seen_users.add(u.id)
+        at_risk.append({
+            "name": u.full_name,
+            "email": u.email,
+            "progress": e.progress_pct,
+            "quiz_score": lp.avg_quiz_score if lp else 0,
+            "course": "See enrollments",
+        })
+
+    # Completion trend over last 6 weeks
+    from sqlalchemy import text
+    trend_q = await db.execute(text("""
+        SELECT
+            TO_CHAR(DATE_TRUNC('week', COALESCE(completed_at, started_at)), 'Mon DD') AS week,
+            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+            COUNT(*) AS total
+        FROM enrollments
+        WHERE COALESCE(completed_at, started_at) >= NOW() - INTERVAL '42 days'
+        GROUP BY DATE_TRUNC('week', COALESCE(completed_at, started_at))
+        ORDER BY DATE_TRUNC('week', COALESCE(completed_at, started_at))
+    """))
+    trend_rows = trend_q.mappings().all()
+    trend = []
+    for r in trend_rows:
+        pct = round(r["completed"] / r["total"] * 100, 0) if r["total"] else 0
+        trend.append({"name": r["week"], "rate": pct})
+    if not trend:
+        # fallback if no data yet
+        trend = [{"name": "Week 1", "rate": 0}]
+
+    # Score by user for bar chart
+    score_q = await db.execute(
+        select(User.full_name, LearnerProfile.avg_quiz_score)
+        .join(LearnerProfile, LearnerProfile.user_id == User.id)
+        .where(LearnerProfile.avg_quiz_score > 0)
+    )
+    score_rows = score_q.all()
+    score_data = [{"name": r[0].split()[0], "avg": round(r[1], 0), "target": 75} for r in score_rows]
+
+    return {
+        "completionRate": completion_rate,
+        "completedCount": completed,
+        "totalEnrollments": total,
+        "avgQuizScore": avg_quiz,
+        "atRiskCount": len(at_risk),
+        "atRisk": at_risk,
+        "completionTrend": trend,
+        "scoreByUser": score_data,
+    }
+
+
+# --- User Profile Update ---
+
+
+async def update_user(db: AsyncSession, user_id: int, *,
+                      full_name: str | None = None,
+                      password: str | None = None) -> User | None:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        return None
+    if full_name is not None:
+        user.full_name = full_name
+    if password is not None:
+        user.password = password
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+# --- Search ---
+
+
+async def search(db: AsyncSession, q: str) -> tuple[list[Course], list[User]]:
+    pattern = f"%{q}%"
+    course_q = await db.execute(
+        select(Course).where(
+            (Course.title.ilike(pattern)) | (Course.description.ilike(pattern))
+        ).limit(10)
+    )
+    courses = list(course_q.scalars().all())
+
+    user_q = await db.execute(
+        select(User).where(User.full_name.ilike(pattern)).limit(10)
+    )
+    users = list(user_q.scalars().all())
+    return courses, users
+

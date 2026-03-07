@@ -123,3 +123,39 @@ async def update_profile(
     updates = compute_updated_profile(profile, body.quiz_score, body.module_title)
     updated = await storage.update_learner_profile(db, user_id, **updates)
     return LearnerProfileOut.model_validate(updated).model_dump(by_alias=True)
+
+
+@router.get("/profile/{target_user_id}")
+async def get_employee_profile(
+    target_user_id: int,
+    user_id: int = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get learner profile + enrollment summary for any user (manager/L&D only)."""
+    from sqlalchemy import select
+    from models import User
+    # Check requester role
+    req_q = await db.execute(select(User).where(User.id == user_id))
+    requester = req_q.scalar_one_or_none()
+    if not requester or requester.role not in ("manager", "l_and_d"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    profile = await storage.get_or_create_learner_profile(db, target_user_id)
+    enrollments = await storage.get_enrollments(db, user_id=target_user_id)
+
+    enrollment_summary = []
+    for item in enrollments:
+        e = item["enrollment"]
+        c = item["course"]["course"] if item["course"] else None
+        enrollment_summary.append({
+            "courseId": e.course_id,
+            "courseTitle": c.title if c else "Unknown",
+            "status": e.status,
+            "progressPct": e.progress_pct,
+        })
+
+    return {
+        "profile": LearnerProfileOut.model_validate(profile).model_dump(by_alias=True),
+        "enrollments": enrollment_summary,
+    }

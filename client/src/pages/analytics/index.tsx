@@ -1,33 +1,11 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, Cell } from "recharts";
-import { TrendingUp, Users, AlertCircle, ArrowUpRight, ArrowDownRight, LightbulbIcon } from "lucide-react";
-
-// Mock Data
-const MOCK_COMPLETION_DATA = [
-    { name: "Week 1", rate: 45 },
-    { name: "Week 2", rate: 52 },
-    { name: "Week 3", rate: 58 },
-    { name: "Week 4", rate: 65 },
-    { name: "Week 5", rate: 76 },
-    { name: "Week 6", rate: 84 },
-];
-
-const MOCK_SCORE_DATA = [
-    { name: "Eng", avg: 88, target: 85 },
-    { name: "Sales", avg: 72, target: 85 },
-    { name: "Design", avg: 92, target: 85 },
-    { name: "Mktg", avg: 81, target: 85 },
-];
-
-const MOCK_AT_RISK = [
-    { name: "Sarah J.", department: "Sales", issue: "Failed Objection Handling twice", course: "Advanced Sales Q3" },
-    { name: "Mike T.", department: "Marketing", issue: "Stalled at 40% for 3 weeks", course: "Data Analytics Basics" },
-];
+import { TrendingUp, Users, AlertCircle, ArrowUpRight, ArrowDownRight, LightbulbIcon, Loader2 } from "lucide-react";
 
 export default function AnalyticsIntervention() {
     const { user } = useAuth();
@@ -36,6 +14,22 @@ export default function AnalyticsIntervention() {
         return <Redirect to="/dashboard" />;
     }
 
+    const { data, isLoading } = useQuery<any>({
+        queryKey: ["/api/analytics/dashboard"],
+    });
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
+    const completionTrend = data?.completionTrend ?? [];
+    const scoreByUser = data?.scoreByUser ?? [];
+    const atRisk = data?.atRisk ?? [];
+
     return (
         <div className="space-y-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -43,25 +37,34 @@ export default function AnalyticsIntervention() {
                     <h1 className="text-3xl font-display font-bold text-foreground">Analytics & Intervention</h1>
                     <p className="text-muted-foreground mt-2">Monitor training effectiveness and identify learners needing support.</p>
                 </div>
-                <div className="flex gap-2">
-                    <Select defaultValue="all">
-                        <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Departments</SelectItem>
-                            <SelectItem value="eng">Engineering</SelectItem>
-                            <SelectItem value="sales">Sales</SelectItem>
-                            <SelectItem value="design">Design</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <Button variant="outline">Export Report</Button>
-                </div>
+                <Button variant="outline">Export Report</Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Avg Completion Rate" value="84%" trend="+12%" positive />
-                <StatCard title="Avg Exam Score" value="82%" trend="+3%" positive />
-                <StatCard title="Learners At Risk" value="14" trend="-2" positive />
-                <StatCard title="Total Training Hours" value="1,240" trend="+150" positive />
+                <StatCard
+                    title="Avg Completion Rate"
+                    value={`${data?.completionRate ?? 0}%`}
+                    trend={`${data?.completedCount ?? 0}/${data?.totalEnrollments ?? 0} completed`}
+                    positive={(data?.completionRate ?? 0) >= 50}
+                />
+                <StatCard
+                    title="Avg Quiz Score"
+                    value={`${data?.avgQuizScore ?? 0}%`}
+                    trend={data?.avgQuizScore >= 75 ? "Above target" : "Below target"}
+                    positive={(data?.avgQuizScore ?? 0) >= 75}
+                />
+                <StatCard
+                    title="Learners At Risk"
+                    value={String(data?.atRiskCount ?? 0)}
+                    trend={data?.atRiskCount > 0 ? "Need attention" : "All on track"}
+                    positive={(data?.atRiskCount ?? 1) === 0}
+                />
+                <StatCard
+                    title="Total Enrollments"
+                    value={String(data?.totalEnrollments ?? 0)}
+                    trend="All time"
+                    positive
+                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -72,13 +75,11 @@ export default function AnalyticsIntervention() {
                     </CardHeader>
                     <CardContent className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={MOCK_COMPLETION_DATA}>
+                            <LineChart data={completionTrend}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} domain={[0, 100]} />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
+                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                                 <Line type="monotone" dataKey="rate" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                             </LineChart>
                         </ResponsiveContainer>
@@ -87,21 +88,18 @@ export default function AnalyticsIntervention() {
 
                 <Card className="border-border/50 shadow-md">
                     <CardHeader>
-                        <CardTitle>Exam Performance by Dept</CardTitle>
-                        <CardDescription>Average scores compared to target baseline (85%).</CardDescription>
+                        <CardTitle>Quiz Performance by Learner</CardTitle>
+                        <CardDescription>Average quiz scores compared to 75% target baseline.</CardDescription>
                     </CardHeader>
                     <CardContent className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={MOCK_SCORE_DATA}>
+                            <BarChart data={scoreByUser}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} domain={[0, 100]} />
-                                <Tooltip
-                                    cursor={{ fill: "hsl(var(--muted))" }}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
+                                <Tooltip cursor={{ fill: "hsl(var(--muted))" }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                                 <Bar dataKey="avg" radius={[4, 4, 0, 0]}>
-                                    {MOCK_SCORE_DATA.map((entry, index) => (
+                                    {scoreByUser.map((entry: any, index: number) => (
                                         <Cell key={`cell-${index}`} fill={entry.avg >= entry.target ? "hsl(var(--primary))" : "hsl(var(--destructive))"} />
                                     ))}
                                 </Bar>
@@ -119,23 +117,32 @@ export default function AnalyticsIntervention() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
-                        <div className="divide-y divide-border/50">
-                            {MOCK_AT_RISK.map((learner, i) => (
-                                <div key={i} className="p-5 flex flex-col sm:flex-row justify-between gap-4 hover:bg-muted/10">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h4 className="font-semibold">{learner.name}</h4>
-                                            <Badge variant="outline" className="text-xs">{learner.department}</Badge>
+                        {atRisk.length === 0 ? (
+                            <div className="p-6 text-center text-muted-foreground">
+                                <TrendingUp className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                                All learners are on track!
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-border/50">
+                                {atRisk.map((learner: any, i: number) => (
+                                    <div key={i} className="p-5 flex flex-col sm:flex-row justify-between gap-4 hover:bg-muted/10">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h4 className="font-semibold">{learner.name}</h4>
+                                                <Badge variant="outline" className="text-xs">{learner.email}</Badge>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground">
+                                                <span className="font-medium text-destructive">Progress: {learner.progress}%</span>
+                                                {" · "}Quiz avg: {learner.quiz_score}%
+                                            </p>
                                         </div>
-                                        <p className="text-sm text-muted-foreground"><span className="font-medium text-destructive">{learner.issue}</span> in {learner.course}</p>
+                                        <div className="flex gap-2 shrink-0">
+                                            <Button size="sm">Assign Remedial</Button>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2 shrink-0">
-                                        <Button variant="secondary" size="sm">Message</Button>
-                                        <Button size="sm">Assign Remedial</Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -147,14 +154,16 @@ export default function AnalyticsIntervention() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="p-4 bg-background rounded-xl border border-border/50 shadow-sm">
-                            <h4 className="font-semibold mb-1">Sales Department Content Alert</h4>
-                            <p className="text-sm text-muted-foreground">The "Objection Handling" module has a 45% failure rate on the first attempt. The AI recommends regenerating this module to include more interactive scenarios to improve comprehension.</p>
-                            <Button variant="ghost" className="px-0 mt-2 h-auto text-primary">Review Module Content <ArrowRight className="w-3 h-3 ml-1" /></Button>
+                            <h4 className="font-semibold mb-1">At-Risk Learner Support</h4>
+                            <p className="text-sm text-muted-foreground">
+                                Learners with quiz scores below 50% or progress below 30% are flagged. Consider scheduling 1-on-1 coaching or reassigning simpler prerequisites.
+                            </p>
                         </div>
                         <div className="p-4 bg-background rounded-xl border border-border/50 shadow-sm">
-                            <h4 className="font-semibold mb-1">Engineering Excellence</h4>
-                            <p className="text-sm text-muted-foreground">Engineering team is completing security training 3x faster than average with 95% scores. They may be ready for the "Advanced Cybersecurity" track.</p>
-                            <Button variant="ghost" className="px-0 mt-2 h-auto text-primary">View Recommended Track <ArrowRight className="w-3 h-3 ml-1" /></Button>
+                            <h4 className="font-semibold mb-1">Top Performer Recognition</h4>
+                            <p className="text-sm text-muted-foreground">
+                                Learners with quiz averages above 85% are ready for advanced content. Consider assigning them as peer mentors or enrolling them in next-level courses.
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
@@ -177,14 +186,5 @@ function StatCard({ title, value, trend, positive }: { title: string, value: str
                 </div>
             </CardContent>
         </Card>
-    );
-}
-
-function ArrowRight({ className }: { className?: string }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-            <path d="M5 12h14"></path>
-            <path d="m12 5 7 7-7 7"></path>
-        </svg>
     );
 }

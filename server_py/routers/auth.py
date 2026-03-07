@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from dependencies import get_current_user_id
+from dependencies import get_current_user_id, require_auth
 from schemas import LoginInput, RegisterInput, UserOut, ErrorResponse, MessageResponse
 from session import create_session, delete_session, COOKIE_NAME, MAX_AGE_DAYS
 import storage
@@ -77,3 +77,38 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
         await delete_session(db, sid)
     response.delete_cookie(COOKIE_NAME)
     return MessageResponse(message="Logged out").model_dump(by_alias=True)
+
+
+@router.patch("/profile")
+async def update_profile(
+    body: dict,
+    user_id: int = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update full name and/or password for the current user."""
+    full_name = body.get("fullName")
+    current_password = body.get("currentPassword")
+    new_password = body.get("newPassword")
+
+    user = await storage.get_user(db, user_id)
+    if not user:
+        return Response(
+            content=ErrorResponse(message="User not found").model_dump_json(),
+            status_code=404, media_type="application/json",
+        )
+
+    update_kwargs: dict = {}
+    if full_name:
+        update_kwargs["full_name"] = full_name
+    if current_password and new_password:
+        if user.password != current_password:
+            return Response(
+                content=ErrorResponse(message="Current password is incorrect").model_dump_json(),
+                status_code=400, media_type="application/json",
+            )
+        update_kwargs["password"] = new_password
+
+    if update_kwargs:
+        user = await storage.update_user(db, user_id, **update_kwargs)
+
+    return UserOut.model_validate(user).model_dump(by_alias=True)

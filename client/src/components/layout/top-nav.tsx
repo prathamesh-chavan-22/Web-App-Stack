@@ -1,5 +1,5 @@
-import { Link } from "wouter";
-import { Bell, LogOut, Search, User as UserIcon } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Bell, LogOut, Search, User as UserIcon, BookOpen, Users, X } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { useNotifications, useMarkNotificationRead } from "@/hooks/use-notifications";
@@ -16,24 +16,133 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
+import { useState, useCallback, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setter = useCallback((v: T) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDebounced(v), delay);
+  }, [delay]);
+  // Update debounced value via setter when value changes
+  setter(value);
+  return debounced;
+}
 
 export function TopNav() {
   const { user, logout } = useAuth();
   const { data: notifications = [] } = useNotifications();
   const markRead = useMarkNotificationRead();
+  const [, navigate] = useLocation();
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
+  const { data: searchResults } = useQuery<{ courses: any[]; users: any[] }>({
+    queryKey: ["/api/courses/search", { q: debouncedSearch }],
+    queryFn: async () => {
+      if (debouncedSearch.length < 2) return { courses: [], users: [] };
+      const res = await fetch(`/api/courses/search?q=${encodeURIComponent(debouncedSearch)}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: debouncedSearch.length >= 2,
+  });
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+  const hasResults = searchResults && (searchResults.courses.length > 0 || searchResults.users.length > 0);
+
+  const handleResultClick = (path: string) => {
+    navigate(path);
+    setSearchTerm("");
+    setSearchOpen(false);
+  };
 
   return (
     <header className="h-16 border-b border-border/50 bg-background/80 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
       <div className="flex items-center gap-4">
         <SidebarTrigger />
-        <div className="hidden md:flex relative max-w-md w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search courses, users..."
-            className="pl-9 bg-muted/50 border-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded-full h-10 w-[300px]"
-          />
+        <div className="hidden md:flex relative">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
+              placeholder="Search courses, users..."
+              className="pl-9 pr-8 bg-muted/50 border-none focus-visible:ring-1 focus-visible:ring-primary/30 rounded-full h-10 w-[300px]"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => { setSearchTerm(""); setSearchOpen(false); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Search dropdown */}
+          {searchOpen && debouncedSearch.length >= 2 && (
+            <div className="absolute top-[calc(100%+8px)] left-0 w-[360px] bg-popover border border-border/50 rounded-xl shadow-2xl overflow-hidden z-50">
+              {!hasResults ? (
+                <div className="p-4 text-sm text-center text-muted-foreground">No results for "{debouncedSearch}"</div>
+              ) : (
+                <>
+                  {searchResults!.courses.length > 0 && (
+                    <>
+                      <div className="px-3 pt-3 pb-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Courses</p>
+                      </div>
+                      {searchResults!.courses.map((c: any) => (
+                        <button
+                          key={c.id}
+                          onMouseDown={() => handleResultClick(`/courses/${c.id}`)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 text-left transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <BookOpen className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="truncate">
+                            <p className="text-sm font-medium truncate">{c.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">{c.status}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {searchResults!.users.length > 0 && (
+                    <>
+                      <div className="px-3 pt-3 pb-1 border-t border-border/30">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Team Members</p>
+                      </div>
+                      {searchResults!.users.map((u: any) => (
+                        <button
+                          key={u.id}
+                          onMouseDown={() => handleResultClick(`/team`)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 text-left transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-secondary/80 flex items-center justify-center flex-shrink-0 text-sm font-bold">
+                            {u.fullName?.charAt(0)}
+                          </div>
+                          <div className="truncate">
+                            <p className="text-sm font-medium">{u.fullName}</p>
+                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -56,11 +165,7 @@ export function TopNav() {
             </div>
             <div className="max-h-[300px] overflow-y-auto">
               {notifications.length === 0 ? (
-                <DropdownMenuItem className="w-full text-center p-0 justify-center" asChild>
-                  <Link href="/notifications" className="block w-full text-sm font-medium p-2 bg-muted/50 hover:bg-muted/80">
-                    See all notifications
-                  </Link>
-                </DropdownMenuItem>
+                <p className="p-4 text-sm text-center text-muted-foreground">No notifications yet.</p>
               ) : (
                 notifications.map(n => (
                   <div
