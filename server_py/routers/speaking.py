@@ -1,19 +1,19 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Response, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from dependencies import require_auth
 from schemas import (
     SpeakingPracticeOut, SpeakingTopicOut, SpeakingLessonOut,
-    UserLessonProgressOut, ErrorResponse
+    UserLessonProgressOut
 )
 import storage
 from services.mistral_ai import analyze_speaking_transcript
 from services.edge_tts_service import generate_audio
-from services.lesson_recommender import recommend_next_lesson, get_continue_lesson, get_recommendations
+from services.lesson_recommender import get_recommendations
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ async def get_topic(
     """Get a specific topic with its lessons."""
     topic = await storage.get_speaking_topic(db, topic_id)
     if not topic:
-        return Response(status_code=404, content="Topic not found")
+        raise HTTPException(status_code=404, detail="Topic not found")
     
     lessons = await storage.get_speaking_lessons(db, topic_id=topic_id)
     
@@ -156,8 +156,8 @@ async def get_topic(
 
 @router.get("/lessons")
 async def list_lessons(
-    topic_id: Optional[int] = Query(None),
-    difficulty_level: Optional[int] = Query(None),
+    topic_id: Optional[int] = Query(None, alias="topicId"),
+    difficulty_level: Optional[int] = Query(None, alias="difficultyLevel"),
     user_id: int = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
@@ -190,7 +190,7 @@ async def get_lesson(
     """Get a specific lesson with its details and user progress."""
     lesson = await storage.get_speaking_lesson(db, lesson_id)
     if not lesson:
-        return Response(status_code=404, content="Lesson not found")
+        raise HTTPException(status_code=404, detail="Lesson not found")
     
     # Get user's language preference
     user = await storage.get_user(db, user_id)

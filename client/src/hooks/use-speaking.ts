@@ -4,10 +4,7 @@ import type {
   SpeakingTopic,
   SpeakingLesson,
   UserLessonProgress,
-} from "@db/schema";
-
-// API endpoints
-const API_BASE = "/api/speaking";
+} from "@shared/schema";
 
 // Types for API responses
 type TopicWithProgress = SpeakingTopic & {
