@@ -33,10 +33,34 @@ async def _process_analysis(analysis_id: int, rows: list[dict], headers: list[st
             name_col = column_mapping.get("employee_name", "")
             dept_col = column_mapping.get("department", "")
             remarks_col = column_mapping.get("manager_remarks", "")
+            email_col = column_mapping.get("email", "")
+
+            # Fallback: if AI didn't detect the email column, look for a header containing "email"
+            if not email_col:
+                for h in headers:
+                    if "email" in h.lower():
+                        email_col = h
+                        break
 
             if not name_col or not remarks_col:
                 await storage.update_analysis_status(db, analysis_id, status="failed")
                 return
+
+            # Step 1.5: Auto-create users from email column
+            if email_col:
+                logger.info("Email column detected: '%s'. Auto-creating users from CSV.", email_col)
+                for row in rows:
+                    email = (row.get(email_col) or "").strip().lower()
+                    if not email:
+                        continue
+                    existing_user = await storage.get_user_by_email(db, email)
+                    if existing_user is None:
+                        emp_name = row.get(name_col, "Unknown Employee").strip()
+                        await storage.create_user(
+                            db, email=email, password="password",
+                            full_name=emp_name, role="employee",
+                        )
+                        logger.info("Created user account for: %s (%s)", emp_name, email)
 
             # Get existing courses for matching
             course_data = await storage.get_courses(db)

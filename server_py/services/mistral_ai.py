@@ -44,10 +44,10 @@ async def detect_csv_columns(headers: list[str], sample_rows: list[list[str]]) -
             "role": "system",
             "content": (
                 "You are a data analyst assistant. Given CSV headers and sample rows, "
-                "identify which columns map to: employee_name, department, manager_remarks. "
+                "identify which columns map to: employee_name, email, department, manager_remarks. "
                 "Return a JSON object mapping these keys to the actual column header names. "
                 "Only include keys where you can confidently identify a matching column. "
-                "Example: {\"employee_name\": \"Name\", \"department\": \"Dept\", \"manager_remarks\": \"Manager Comments\"}"
+                "Example: {\"employee_name\": \"Name\", \"email\": \"Email\", \"department\": \"Dept\", \"manager_remarks\": \"Manager Comments\"}"
             ),
         },
         {
