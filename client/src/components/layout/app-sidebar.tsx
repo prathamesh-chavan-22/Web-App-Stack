@@ -11,7 +11,8 @@ import {
   Wand2,
   Activity,
   ClipboardCheck,
-  BarChart3
+  BarChart3,
+  Headphones,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,6 +37,7 @@ export function AppSidebar() {
   const routes = [
     { title: "Dashboard", icon: LayoutDashboard, url: "/dashboard", roles: ["l_and_d", "manager", "employee"] },
     { title: "Workforce Analysis", icon: Activity, url: "/analysis", roles: ["l_and_d"] },
+    { title: "Audio to Mindmap", icon: Headphones, url: "/audio", roles: ["l_and_d", "manager", "employee"] },
     { title: "Assessments", icon: ClipboardCheck, url: "/assessments", roles: ["l_and_d", "employee"] },
     { title: "Analytics & Intervention", icon: BarChart3, url: "/analytics", roles: ["l_and_d", "manager"] },
     { title: "My Learning", icon: GraduationCap, url: "/learning", roles: ["employee", "manager"] },

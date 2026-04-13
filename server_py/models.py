@@ -248,3 +248,22 @@ class Assessment(Base):
     score: Mapped[float] = mapped_column(Float, nullable=False)
     answers: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+
+
+class AudioUpload(Base):
+    __tablename__ = "audio_uploads"
+    __table_args__ = (
+        Index('idx_audio_uploads_user_created', 'user_id', 'created_at'),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    audio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    transcript: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    mindmap_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="uploading")
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

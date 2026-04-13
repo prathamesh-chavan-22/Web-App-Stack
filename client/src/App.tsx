@@ -22,6 +22,8 @@ import Assessments from "./pages/assessments/index";
 import Analytics from "./pages/analytics/index";
 import Settings from "./pages/settings/index";
 import Notifications from "./pages/notifications/index";
+import AudioUploadPage from "./pages/audio/index";
+import MindmapViewerPage from "./pages/audio/[id]";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
   return (
@@ -55,6 +57,8 @@ function Router() {
       <ProtectedRoute path="/speaking/practice/:id" component={SpeakingPractice} />
       <ProtectedRoute path="/speaking/progress" component={SpeakingProgress} />
       <ProtectedRoute path="/team" component={TeamManagement} />
+      <ProtectedRoute path="/audio" component={AudioUploadPage} />
+      <ProtectedRoute path="/audio/:id" component={MindmapViewerPage} />
 
       <Route component={NotFound} />
     </Switch>

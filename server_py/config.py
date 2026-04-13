@@ -11,6 +11,7 @@ SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "development_secret")
 PORT: int = int(os.environ.get("PORT", "5000"))
 
 MISTRAL_API_KEY: str = os.environ.get("MISTRAL_API_KEY", "")
+GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 
 # Convert postgres:// to postgresql+asyncpg:// for SQLAlchemy async
 ASYNC_DATABASE_URL: str = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
