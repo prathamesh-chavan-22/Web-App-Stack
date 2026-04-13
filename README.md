@@ -4,7 +4,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Node.js 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
 
 ---
 
@@ -27,11 +26,10 @@ EduVin AI is a modern, full-stack learning management platform designed for ente
 
 ## 🏗️ Architecture
 
-**Frontend:** React 18 + TypeScript + Vite + TailwindCSS + Shadcn/UI  
-**Backend:** Python 3.11 + FastAPI + SQLAlchemy (Async)  
-**Database:** PostgreSQL with async support  
-**AI Services:** Mistral AI (Tutoring), Edge TTS (Speech)  
-**Real-time:** WebSocket support for notifications  
+**Frontend:** React 18 + TypeScript + Vite + TailwindCSS + Shadcn/UI
+**Backend:** Python 3.11 + FastAPI + SQLAlchemy (Async)
+**Database:** PostgreSQL with async support
+**AI Services:** Mistral AI (Tutoring), Edge TTS (Speech)
 
 ```
 ┌─────────────────┐      ┌──────────────────┐      ┌─────────────┐
@@ -47,58 +45,118 @@ EduVin AI is a modern, full-stack learning management platform designed for ente
                     └─────────┘      └─────────┘
 ```
 
-📖 **[View Detailed Architecture](docs/ARCHITECTURE.md)**
+**Production deployment:** Build the client with `npm run build`, then serve `dist/` via nginx (or any static file server) and proxy `/api/*` to FastAPI. See [nginx.conf](nginx.conf) for a template.
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Option 1: Python Backend Only (Recommended)
 
-- **Node.js** 18+ and npm
+This is the simplest setup — run the FastAPI backend directly without Node.js for the server.
+
+#### Prerequisites
+
 - **Python** 3.11+
 - **PostgreSQL** 14+
+- **Node.js** 18+ and npm (only for building the frontend)
 
-### Installation
+#### 1. Clone the repository
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd Web-App-Stack
-   ```
+```bash
+git clone <repository-url>
+cd Web-App-Stack
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+#### 2. Setup Python backend
 
-3. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your database credentials
-   ```
+```bash
+# Create and activate a virtual environment (recommended)
+cd server_py
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-4. **Setup database**
-   ```bash
-   createdb eduvin_ai
-   npm run db:push
-   ```
+# Install Python dependencies
+pip install -r requirements.txt
+```
 
-5. **Run development servers**
-   ```bash
-   # Terminal 1 - Frontend
-   npm run dev:client
+#### 3. Configure environment
 
-   # Terminal 2 - Backend API
-   npm run dev:api
-   ```
+```bash
+# Copy the example env file
+cp .env.example .env
 
-6. **Access the application**
-   - Frontend: http://localhost:5173
-   - API: http://localhost:5000
-   - API Docs: http://localhost:5000/docs
+# Edit with your database credentials and API keys
+nano .env
+```
 
-📖 **[Detailed Setup Guide](docs/SETUP.md)**
+#### 4. Setup database
+
+```bash
+# Create the database
+createdb edtech_lms
+
+# The app auto-creates tables and seeds data on first startup
+```
+
+#### 5. Run the backend
+
+```bash
+cd server_py
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 5000
+```
+
+#### 6. Run the frontend (development)
+
+```bash
+# In a separate terminal, from project root
+npm install
+npm run dev
+```
+
+#### 7. Access the application
+
+- Frontend (dev): http://localhost:5173
+- API: http://localhost:5000
+- API Docs: http://localhost:5000/docs
+
+---
+
+### Option 2: Production Deployment with Nginx
+
+For production, serve the built client with nginx and proxy API requests to FastAPI.
+
+#### 1. Build the frontend
+
+```bash
+npm install
+npm run build
+```
+
+This outputs static files to `dist/`.
+
+#### 2. Start FastAPI
+
+```bash
+cd server_py
+python -m uvicorn main:app --host 127.0.0.1 --port 5000
+```
+
+#### 3. Configure nginx
+
+Copy and edit the provided [nginx.conf](nginx.conf):
+
+```bash
+# Update the root path in nginx.conf to your absolute dist/ path
+# e.g., root /home/user/Web-App-Stack/dist;
+
+nginx -c $(pwd)/nginx.conf
+```
+
+#### 4. Access the application
+
+- Application: http://localhost (or your server's domain)
+- API: http://localhost/api/* (proxied to FastAPI)
 
 ---
 
@@ -166,10 +224,9 @@ EduVin AI is a modern, full-stack learning management platform designed for ente
 - **Content Analysis:** Custom ML models
 
 ### DevOps
-- **Database Migrations:** Drizzle Kit
-- **Package Manager:** npm
-- **Python Dependencies:** pip (pyproject.toml)
-- **Type Checking:** TypeScript + mypy (planned)
+- **Database Migrations:** Auto-created on startup
+- **Package Manager:** npm (frontend only)
+- **Python Dependencies:** pip (requirements.txt)
 
 ---
 
@@ -206,6 +263,7 @@ Web-App-Stack/
 │   └── routes.ts          # API route definitions
 │
 ├── docs/                  # Documentation (modular)
+├── dist/                  # Built frontend (generated by npm run build)
 └── script/                # Build and utility scripts
 ```
 
@@ -214,13 +272,7 @@ Web-App-Stack/
 ## 🧪 Testing
 
 ```bash
-# Run frontend tests
-npm run test
-
-# Run backend tests (when implemented)
-cd server_py && pytest
-
-# Type checking
+# Type checking (frontend)
 npm run check
 ```
 
@@ -232,8 +284,10 @@ npm run check
 # Build frontend for production
 npm run build
 
-# Start production server
-npm start
+# Start FastAPI backend
+cd server_py && python -m uvicorn main:app --host 0.0.0.0 --port 5000
+
+# Serve dist/ with nginx (see nginx.conf for template)
 ```
 
 📖 **[Deployment Guide](docs/DEPLOYMENT.md)** (coming soon)

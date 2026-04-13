@@ -89,10 +89,12 @@ static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/api/static", StaticFiles(directory=static_dir), name="static")
 
-# Production: serve static files
-dist_dir = os.path.join(os.path.dirname(__file__), "..", "dist", "public")
+# Production: serve static files from dist/ (built by Vite)
+dist_dir = os.path.join(os.path.dirname(__file__), "..", "dist")
 if os.path.isdir(dist_dir):
-    app.mount("/assets", StaticFiles(directory=os.path.join(dist_dir, "assets")), name="assets")
+    assets_dir = os.path.join(dist_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     from fastapi.responses import FileResponse
 
