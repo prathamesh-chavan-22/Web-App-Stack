@@ -116,15 +116,20 @@ async def list_topics(
 ):
     """Get all speaking topics with progress information."""
     topics = await storage.get_speaking_topics(db)
-    
-    # Add progress info for each topic
+
+    # Batch progress for all topics in 2 queries instead of 2×N
+    topic_ids = [t.id for t in topics]
+    progress_map = await storage.get_topic_progress_batch(db, user_id, topic_ids)
+
     result = []
     for topic in topics:
-        progress_info = await storage.get_topic_progress(db, user_id, topic.id)
         topic_dict = SpeakingTopicOut.model_validate(topic).model_dump(by_alias=True)
-        topic_dict["progress"] = progress_info
+        topic_dict["progress"] = progress_map.get(topic.id, {
+            "total_lessons": 0, "completed_lessons": 0,
+            "completion_pct": 0, "avg_score": 0,
+        })
         result.append(topic_dict)
-    
+
     return result
 
 

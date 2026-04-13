@@ -69,34 +69,37 @@ async def _process_analysis(analysis_id: int, rows: list[dict], headers: list[st
                 for c in course_data
             ]
 
+            # Process with bounded concurrency (5 simultaneous AI calls)
+            semaphore = asyncio.Semaphore(5)
+
             # Step 2: Analyze each employee's remarks
             async def process_employee(row: dict):
-                emp_name = row.get(name_col, "Unknown")
-                department = row.get(dept_col, None)
-                remarks = row.get(remarks_col, "")
+                async with semaphore:
+                    emp_name = row.get(name_col, "Unknown")
+                    department = row.get(dept_col, None)
+                    remarks = row.get(remarks_col, "")
 
-                if not remarks.strip():
+                    if not remarks.strip():
+                        await storage.create_analysis_result(
+                            db, analysis_id=analysis_id, employee_name=emp_name,
+                            department=department, manager_remarks=remarks,
+                            ai_summary="No remarks provided.",
+                        )
+                        return
+
+                    ai_result = await analyze_remarks(emp_name, department, remarks, existing_courses)
+
                     await storage.create_analysis_result(
                         db, analysis_id=analysis_id, employee_name=emp_name,
                         department=department, manager_remarks=remarks,
-                        ai_summary="No remarks provided.",
+                        ai_summary=ai_result["summary"],
+                        recommended_skills=ai_result["recommended_skills"],
+                        matched_course_ids=ai_result["matched_courses"],
+                        suggested_trainings=ai_result["suggested_trainings"],
                     )
-                    return
 
-                ai_result = await analyze_remarks(emp_name, department, remarks, existing_courses)
-
-                await storage.create_analysis_result(
-                    db, analysis_id=analysis_id, employee_name=emp_name,
-                    department=department, manager_remarks=remarks,
-                    ai_summary=ai_result["summary"],
-                    recommended_skills=ai_result["recommended_skills"],
-                    matched_course_ids=ai_result["matched_courses"],
-                    suggested_trainings=ai_result["suggested_trainings"],
-                )
-
-            # Process sequentially to avoid concurrent commits on same session
-            for row in rows:
-                await process_employee(row)
+            # Run all employees concurrently with bounded concurrency
+            await asyncio.gather(*(process_employee(row) for row in rows))
 
             await storage.update_analysis_status(
                 db, analysis_id, status="completed", total_employees=len(rows),

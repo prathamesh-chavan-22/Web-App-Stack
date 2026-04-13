@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import Integer, Text, Boolean, DateTime, Float, ARRAY, ForeignKey, func, JSON, UniqueConstraint
+from sqlalchemy import Integer, Text, Boolean, DateTime, Float, ARRAY, ForeignKey, func, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -39,6 +39,9 @@ class Course(Base):
 
 class CourseModule(Base):
     __tablename__ = "course_modules"
+    __table_args__ = (
+        Index('idx_course_modules_course_id', 'course_id'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     course_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("courses.id"))
@@ -67,6 +70,8 @@ class Enrollment(Base):
     __tablename__ = "enrollments"
     __table_args__ = (
         UniqueConstraint('user_id', 'course_id', name='uix_user_course'),
+        Index('idx_enrollments_status', 'status'),
+        Index('idx_enrollments_user', 'user_id'),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -80,6 +85,10 @@ class Enrollment(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index('idx_notifications_user_id', 'user_id'),
+        Index('idx_notifications_user_unread', 'user_id', 'is_read'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
@@ -119,6 +128,9 @@ class SpeakingLesson(Base):
 
 class UserLessonProgress(Base):
     __tablename__ = "user_lesson_progress"
+    __table_args__ = (
+        Index('idx_lesson_progress_user_lesson', 'user_id', 'lesson_id'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
@@ -132,6 +144,9 @@ class UserLessonProgress(Base):
 
 class SpeakingPractice(Base):
     __tablename__ = "speaking_practices"
+    __table_args__ = (
+        Index('idx_speaking_practices_user_created', 'user_id', 'created_at'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
@@ -150,6 +165,9 @@ class SpeakingPractice(Base):
 
 class WorkflowAnalysis(Base):
     __tablename__ = "workflow_analyses"
+    __table_args__ = (
+        Index('idx_workflow_analyses_user_created', 'created_by', 'created_at'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
@@ -163,6 +181,9 @@ class WorkflowAnalysis(Base):
 
 class AnalysisResult(Base):
     __tablename__ = "analysis_results"
+    __table_args__ = (
+        Index('idx_analysis_results_analysis_id', 'analysis_id'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     analysis_id: Mapped[int] = mapped_column(Integer, ForeignKey("workflow_analyses.id"), nullable=False)
@@ -200,6 +221,9 @@ class LearnerProfile(Base):
 
 class TutorMessage(Base):
     __tablename__ = "tutor_messages"
+    __table_args__ = (
+        Index('idx_tutor_messages_user_course_created', 'user_id', 'course_id', 'created_at'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
@@ -213,6 +237,9 @@ class TutorMessage(Base):
 
 class Assessment(Base):
     __tablename__ = "assessments"
+    __table_args__ = (
+        Index('idx_assessments_user_module', 'user_id', 'module_id'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)

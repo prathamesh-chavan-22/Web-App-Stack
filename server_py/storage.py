@@ -47,12 +47,25 @@ async def get_courses(db: AsyncSession) -> List[dict]:
 
 
 async def get_course(db: AsyncSession, course_id: int) -> dict | None:
+    """Fetch course with creator and modules in 2 queries (optimized from O(N) queries)."""
+    # Single query for course
     result = await db.execute(select(Course).where(Course.id == course_id))
     course = result.scalar_one_or_none()
     if course is None:
         return None
-    modules = await get_course_modules(db, course.id)
-    creator = await get_user(db, course.created_by) if course.created_by else None
+    
+    # Single query for all modules (was 1 query per module)
+    modules_result = await db.execute(
+        select(CourseModule).where(CourseModule.course_id == course.id).order_by(CourseModule.sort_order)
+    )
+    modules = list(modules_result.scalars().all())
+    
+    # Single query for creator (only if needed)
+    creator = None
+    if course.created_by:
+        creator_result = await db.execute(select(User).where(User.id == course.created_by))
+        creator = creator_result.scalar_one_or_none()
+    
     return {"course": course, "modules": modules, "creator": creator}
 
 
@@ -170,16 +183,64 @@ async def upsert_course_concept_graph(
 
 
 async def get_enrollments(db: AsyncSession, user_id: int | None = None) -> List[dict]:
+    """Fetch enrollments with batch queries (was O(M×N) queries, now O(1))."""
+    # 1. Fetch all enrollments
     stmt = select(Enrollment)
     if user_id is not None:
         stmt = stmt.where(Enrollment.user_id == user_id)
     result = await db.execute(stmt)
     enrollments = list(result.scalars().all())
+    
+    if not enrollments:
+        return []
+    
+    # 2. Batch-fetch courses for all unique course IDs
+    course_ids = [e.course_id for e in enrollments if e.course_id]
+    courses_map = {}
+    if course_ids:
+        courses_result = await db.execute(select(Course).where(Course.id.in_(course_ids)))
+        for course in courses_result.scalars().all():
+            courses_map[course.id] = course
+    
+    # 3. Batch-fetch modules for all courses
+    modules_map = {}
+    if course_ids:
+        modules_result = await db.execute(
+            select(CourseModule).where(CourseModule.course_id.in_(course_ids)).order_by(CourseModule.sort_order)
+        )
+        for mod in modules_result.scalars().all():
+            modules_map.setdefault(mod.course_id, []).append(mod)
+    
+    # 4. Batch-fetch users (creators + enrollment users)
+    user_ids = set()
+    for e in enrollments:
+        if e.user_id:
+            user_ids.add(e.user_id)
+        course = courses_map.get(e.course_id)
+        if course and course.created_by:
+            user_ids.add(course.created_by)
+    
+    users_map = {}
+    if user_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for user in users_result.scalars().all():
+            users_map[user.id] = user
+    
+    # 5. Assemble result
     out = []
     for e in enrollments:
-        course_data = await get_course(db, e.course_id) if e.course_id else None
-        user = await get_user(db, e.user_id) if e.user_id else None
+        course_data = None
+        if e.course_id and e.course_id in courses_map:
+            course = courses_map[e.course_id]
+            creator = users_map.get(course.created_by) if course.created_by else None
+            course_data = {
+                "course": course,
+                "modules": modules_map.get(e.course_id, []),
+                "creator": creator,
+            }
+        user = users_map.get(e.user_id) if e.user_id else None
         out.append({"enrollment": e, "course": course_data, "user": user})
+    
     return out
 
 
@@ -420,7 +481,7 @@ async def get_topic_progress(db: AsyncSession, user_id: int, topic_id: int) -> d
     # Get all lessons for this topic
     lessons = await get_speaking_lessons(db, topic_id=topic_id)
     lesson_ids = [lesson.id for lesson in lessons]
-    
+
     # Get progress for these lessons
     result = await db.execute(
         select(UserLessonProgress).where(
@@ -429,17 +490,60 @@ async def get_topic_progress(db: AsyncSession, user_id: int, topic_id: int) -> d
         )
     )
     progress_records = list(result.scalars().all())
-    
+
     total_lessons = len(lessons)
     completed_lessons = sum(1 for p in progress_records if p.completed)
     avg_score = sum(p.best_score for p in progress_records if p.best_score) / len(progress_records) if progress_records else 0
-    
+
     return {
         "total_lessons": total_lessons,
         "completed_lessons": completed_lessons,
         "completion_pct": (completed_lessons / total_lessons * 100) if total_lessons > 0 else 0,
         "avg_score": avg_score,
     }
+
+
+async def get_topic_progress_batch(db: AsyncSession, user_id: int, topic_ids: list[int]) -> dict[int, dict]:
+    """Get progress for multiple topics in 2 queries instead of 2×N (performance optimized)."""
+    if not topic_ids:
+        return {}
+    
+    # 1. Fetch all lessons for these topics
+    lessons_result = await db.execute(
+        select(SpeakingLesson).where(SpeakingLesson.topic_id.in_(topic_ids))
+    )
+    lessons = list(lessons_result.scalars().all())
+    lesson_ids = [l.id for l in lessons]
+    
+    # Build map: topic_id -> list of lesson_ids
+    lesson_by_topic: dict[int, list[int]] = {}
+    for l in lessons:
+        lesson_by_topic.setdefault(l.topic_id, []).append(l.id)
+
+    # 2. Fetch all progress for these lessons in one query
+    progress_result = await db.execute(
+        select(UserLessonProgress).where(
+            UserLessonProgress.user_id == user_id,
+            UserLessonProgress.lesson_id.in_(lesson_ids)
+        )
+    )
+    progress_records = list(progress_result.scalars().all())
+    progress_map = {p.lesson_id: p for p in progress_records}
+
+    # 3. Compute in memory
+    result = {}
+    for tid in topic_ids:
+        topic_lesson_ids = lesson_by_topic.get(tid, [])
+        total = len(topic_lesson_ids)
+        completed = sum(1 for lid in topic_lesson_ids if progress_map.get(lid) and progress_map[lid].completed)
+        scores = [progress_map[lid].best_score for lid in topic_lesson_ids if progress_map.get(lid) and progress_map[lid].best_score]
+        result[tid] = {
+            "total_lessons": total,
+            "completed_lessons": completed,
+            "completion_pct": (completed / total * 100) if total > 0 else 0,
+            "avg_score": sum(scores) / len(scores) if scores else 0,
+        }
+    return result
 
 
 # --- User Language Preference ---
@@ -653,7 +757,7 @@ async def get_analytics_dashboard(db: AsyncSession) -> dict:
     avg_q = await db.execute(select(sqlfunc.avg(LearnerProfile.avg_quiz_score)))
     avg_quiz = round(float(avg_q.scalar() or 0), 1)
 
-    # At-risk: low progress OR low quiz score
+    # At-risk: low progress OR low quiz score (LIMIT to 50 to prevent unbounded result sets)
     at_risk_q = await db.execute(
         select(Enrollment, User, LearnerProfile)
         .join(User, User.id == Enrollment.user_id)
@@ -661,6 +765,7 @@ async def get_analytics_dashboard(db: AsyncSession) -> dict:
         .where(
             (Enrollment.progress_pct < 30) | (LearnerProfile.avg_quiz_score < 50)
         )
+        .limit(50)  # Cap at 50 at-risk users for dashboard display
     )
     at_risk_rows = at_risk_q.all()
     seen_users = set()
@@ -699,11 +804,12 @@ async def get_analytics_dashboard(db: AsyncSession) -> dict:
         # fallback if no data yet
         trend = [{"name": "Week 1", "rate": 0}]
 
-    # Score by user for bar chart
+    # Score by user for bar chart (LIMIT to 100 to cap payload size)
     score_q = await db.execute(
         select(User.full_name, LearnerProfile.avg_quiz_score)
         .join(LearnerProfile, LearnerProfile.user_id == User.id)
         .where(LearnerProfile.avg_quiz_score > 0)
+        .limit(100)  # Cap chart data to prevent large payloads
     )
     score_rows = score_q.all()
     score_data = [{"name": r[0].split()[0], "avg": round(r[1], 0), "target": 75} for r in score_rows]
